@@ -34,6 +34,12 @@ abstract final class GlassConfig {
   /// Slightly stronger cool-white for interactive elements.
   static const Color coolWhiteStrong = Color(0x2BF4F8FA);
 
+  /// Semi-transparent white for dark-mode glass.
+  static const Color darkGlass = Color(0x2DFFFFFF); // ~18% white
+
+  /// Slightly stronger white for dark-mode interactive elements.
+  static const Color darkGlassStrong = Color(0x38FFFFFF); // ~22% white
+
   // ── Presets ─────────────────────────────────────────────────────────
 
   /// Bottom navigation bar.
@@ -149,5 +155,119 @@ abstract final class GlassConfig {
     chromaticAberration: 0.04,
     specularSharpness: GlassSpecularSharpness.sharp,
     shadowElevation: 1.5,
+  );
+
+  // ── Dark-mode presets ────────────────────────────────────────────────
+
+  /// Dark bottom navigation bar.
+  static const LiquidGlassSettings darkNavBar = LiquidGlassSettings(
+    blur: 12,
+    thickness: 45,
+    lightIntensity: 2.0,
+    lightAngle: lightAngle,
+    glassColor: darkGlass,
+    refractiveIndex: 1.8,
+    ambientStrength: 0.08,
+    saturation: 1.5,
+    glowIntensity: 1.0,
+    chromaticAberration: 0.05,
+    specularSharpness: GlassSpecularSharpness.sharp,
+    shadowElevation: 2.0,
+  );
+
+  /// Dark large panels.
+  static const LiquidGlassSettings darkSurface = LiquidGlassSettings(
+    blur: 10,
+    thickness: 55,
+    lightIntensity: 3.0,
+    lightAngle: lightAngle,
+    glassColor: Color(0x22FFFFFF), // ~13%
+    refractiveIndex: 2.0,
+    ambientStrength: 0.10,
+    saturation: 1.6,
+    glowIntensity: 1.5,
+    chromaticAberration: 0.08,
+    specularSharpness: GlassSpecularSharpness.sharp,
+    shadowElevation: 1.0,
+  );
+
+  /// Dark standard cards.
+  static const LiquidGlassSettings darkCard = LiquidGlassSettings(
+    blur: 12,
+    thickness: 45,
+    lightIntensity: 2.5,
+    lightAngle: lightAngle,
+    glassColor: darkGlass,
+    refractiveIndex: 1.8,
+    ambientStrength: 0.08,
+    saturation: 1.5,
+    glowIntensity: 1.2,
+    chromaticAberration: 0.06,
+    specularSharpness: GlassSpecularSharpness.sharp,
+    shadowElevation: 1.0,
+  );
+
+  /// Dark modal bottom sheet.
+  static const LiquidGlassSettings darkSheet = LiquidGlassSettings(
+    blur: 16,
+    thickness: 45,
+    lightIntensity: 2.0,
+    lightAngle: lightAngle,
+    glassColor: Color(0x2AFFFFFF), // ~16 % white
+    refractiveIndex: 1.6,
+    ambientStrength: 0.10,
+    saturation: 1.5,
+    glowIntensity: 0.9,
+    chromaticAberration: 0.04,
+    specularSharpness: GlassSpecularSharpness.sharp,
+    shadowElevation: 1.0,
+  );
+
+  /// Dark chat input.
+  static const LiquidGlassSettings darkInput = LiquidGlassSettings(
+    blur: 12,
+    thickness: 40,
+    lightIntensity: 2.0,
+    lightAngle: lightAngle,
+    glassColor: Color(0x2AFFFFFF), // ~16 % white
+    refractiveIndex: 1.6,
+    ambientStrength: 0.10,
+    saturation: 1.5,
+    glowIntensity: 0.9,
+    chromaticAberration: 0.04,
+    specularSharpness: GlassSpecularSharpness.sharp,
+    shadowElevation: 1.0,
+  );
+
+  /// Dark interactive elements.
+  static const LiquidGlassSettings darkInteractive = LiquidGlassSettings(
+    blur: 12,
+    thickness: 40,
+    lightIntensity: 2.5,
+    lightAngle: lightAngle,
+    glassColor: darkGlassStrong,
+    refractiveIndex: 1.8,
+    ambientStrength: 0.12,
+    saturation: 1.5,
+    glowIntensity: 1.2,
+    chromaticAberration: 0.05,
+    specularSharpness: GlassSpecularSharpness.sharp,
+    shadowElevation: 1.0,
+  );
+
+  /// Dark small tags / chips.
+  static const LiquidGlassSettings darkTag = LiquidGlassSettings(
+    blur: 10,
+    thickness: 35,
+    lightIntensity: 1.8,
+    lightAngle: lightAngle,
+    glassColor: darkGlass,
+    refractiveIndex: 1.6,
+    ambientStrength: 0.08,
+    saturation: 1.4,
+    glowIntensity: 0.8,
+    chromaticAberration: 0.04,
+    specularSharpness: GlassSpecularSharpness.sharp,
+    shadowElevation: 1.0,
   );
 }
