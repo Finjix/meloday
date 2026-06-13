@@ -1,5 +1,3 @@
-import '../models/mood_colors.dart';
-
 class MockImageService {
   static const _keywordToImage = {
     '妈妈': 'assets/images/family.jpg',
