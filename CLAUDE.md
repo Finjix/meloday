@@ -6,31 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Meloday（音乐日记）是一款 Flutter Web PWA。用户描述当天心情 → AI Agent 引导式对话 → 生成含 AI 音乐、日记摘要、封面图的音乐日记卡片。当前 MVP 阶段使用 Mock 服务跑通完整 UI 流程，不接入真实 AI API。
 
-## 常用命令
-
-```bash
-# 安装依赖
-flutter pub get
-
-# 静态分析
-flutter analyze
-
-# 运行全部测试
-flutter test
-
-# 运行单个测试文件
-flutter test test/models/music_card_test.dart
-
-# 启动 Web 开发服务器
-flutter run -d chrome
-
-# Web 生产构建
-flutter build web
-
-# 运行单个 widget test（指定测试名）
-flutter test --name "should create with required fields" test/models/music_card_test.dart
-```
-
 ## 技术栈
 
 | 层 | 选型 |
