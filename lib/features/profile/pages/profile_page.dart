@@ -222,7 +222,9 @@ class _CustomSwitch extends StatelessWidget {
           ),
         ),
         padding: const EdgeInsets.all(2),
-        child: Align(
+        child: AnimatedAlign(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
           alignment:
               value ? Alignment.centerRight : Alignment.centerLeft,
           child: Container(

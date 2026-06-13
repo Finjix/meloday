@@ -200,9 +200,15 @@ class _TimelineRow extends StatelessWidget {
                         return false; // Let the provider handle removal
                       },
                       background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 20),
                         decoration: BoxDecoration(
                           color: Colors.red.withValues(alpha: 0.8),
                           borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.delete_rounded,
+                          color: Colors.white,
                         ),
                       ),
                       child: MusicCardCompact(

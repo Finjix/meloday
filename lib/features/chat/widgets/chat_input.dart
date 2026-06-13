@@ -28,7 +28,7 @@ class _ChatInputState extends State<ChatInput> {
     if (text.isEmpty || !widget.enabled) return;
     widget.onSend(text);
     _controller.clear();
-    _focusNode.requestFocus();
+    if (widget.enabled) _focusNode.requestFocus();
   }
 
   @override

@@ -13,9 +13,6 @@ abstract final class GlassConfig {
   /// Apple-standard upper-left light source, shared by all surfaces.
   static const double lightAngle = 0.75 * math.pi;
 
-  /// Cool-white glass tint for light mode (~13 % alpha).
-  static const Color coolWhite = Color(0x21F4F8FA);
-
   /// Semi-transparent white for dark-mode glass (~20 % alpha).
   static const Color darkGlass = Color(0x33FFFFFF);
 

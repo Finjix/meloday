@@ -8,9 +8,9 @@ import 'features/profile/pages/profile_page.dart';
 
 /// Root app shell with a glass bottom navigation bar.
 ///
-/// Uses [IndexedStack] for instant page switching and a
-/// [SpringBuilder]-driven sliding pill highlight with spring physics from the
-/// liquid glass library for smooth tab transitions.
+/// Uses [IndexedStack] for instant page switching and an
+/// [AnimatedPositioned] pill highlight with [Curves.easeOutCubic] easing for
+/// smooth tab transitions.
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
