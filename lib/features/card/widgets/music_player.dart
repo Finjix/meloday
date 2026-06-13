@@ -112,7 +112,7 @@ class _MusicPlayerState extends State<MusicPlayer> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GlassContainer(
-      shape: const LiquidRoundedSuperellipse(borderRadius: 999),
+      shape: const LiquidRoundedSuperellipse(borderRadius: 16),
       settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       child: Column(

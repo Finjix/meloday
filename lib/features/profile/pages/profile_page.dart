@@ -161,7 +161,7 @@ class _DarkModeToggle extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GlassContainer(
-      shape: const LiquidRoundedSuperellipse(borderRadius: 999),
+      shape: const LiquidRoundedSuperellipse(borderRadius: 16),
       settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
       child: ListTile(
         leading: Icon(

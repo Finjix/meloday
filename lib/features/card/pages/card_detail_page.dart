@@ -129,7 +129,7 @@ class CardDetailPage extends ConsumerWidget {
             // ── Full diary button ─────────────────────────────────────
             GlassContainer(
               shape:
-                  const LiquidRoundedSuperellipse(borderRadius: 999),
+                  const LiquidRoundedSuperellipse(borderRadius: 16),
               settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
@@ -179,7 +179,7 @@ class CardDetailPage extends ConsumerWidget {
     final gradientColors = AppTheme.gradientPairFromMood(moodColor);
 
     return GlassContainer(
-      shape: const LiquidRoundedSuperellipse(borderRadius: 999),
+      shape: const LiquidRoundedSuperellipse(borderRadius: 16),
       settings: isDark ? GlassConfig.darkSurface : GlassConfig.surface,
       child: Container(
         height: 160,
@@ -205,7 +205,7 @@ class CardDetailPage extends ConsumerWidget {
   Widget _buildTag(BuildContext context, String label, Color moodColor) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return GlassContainer(
-      shape: const LiquidRoundedSuperellipse(borderRadius: 999),
+      shape: const LiquidRoundedSuperellipse(borderRadius: 16),
       settings: isDark ? GlassConfig.darkTag : GlassConfig.tag,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Text(
@@ -335,7 +335,7 @@ class CardDetailPage extends ConsumerWidget {
         builder: (ctx, scrollController) {
           final isDark = Theme.of(context).brightness == Brightness.dark;
           return GlassContainer(
-            shape: const LiquidRoundedSuperellipse(borderRadius: 999),
+            shape: const LiquidRoundedSuperellipse(borderRadius: 16),
             settings: isDark ? GlassConfig.darkSheet : GlassConfig.sheet,
             margin: const EdgeInsets.all(8),
             child: Column(

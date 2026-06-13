@@ -45,7 +45,7 @@ class UserDiaryList extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 GlassContainer(
-                  shape: const LiquidRoundedSuperellipse(borderRadius: 999),
+                  shape: const LiquidRoundedSuperellipse(borderRadius: 16),
                   settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 20,

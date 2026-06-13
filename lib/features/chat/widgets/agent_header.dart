@@ -19,8 +19,8 @@ class AgentHeader extends StatelessWidget {
         children: [
           // Agent avatar — pill shape on the left
           GlassContainer(
-            width: 48,
-            height: 48,
+            width: 55,
+            height: 55,
             shape: const LiquidRoundedSuperellipse(borderRadius: 999),
             settings: isDark ? GlassConfig.darkInteractive : GlassConfig.interactive,
             child: const Center(
@@ -39,7 +39,7 @@ class AgentHeader extends StatelessWidget {
                 child: message != null
                     ? GlassContainer(
                         key: ValueKey(message!.id),
-                        shape: const LiquidRoundedSuperellipse(borderRadius: 999),
+                        shape: const LiquidRoundedSuperellipse(borderRadius: 16),
                         settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
                         padding: const EdgeInsets.all(14),
                         child: Text(
