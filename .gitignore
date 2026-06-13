@@ -35,6 +35,9 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Hive test artifacts
+test_hive/
+
 # Symbolication related
 app.*.symbols
 

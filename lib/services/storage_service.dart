@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/music_card.dart';
 
 class StorageService {
   static const String _boxName = 'cards';
+  static bool _hiveInitialized = false;
   Box<String>? _box;
 
   Future<void> init() async {
@@ -12,9 +14,14 @@ class StorageService {
     _box = await Hive.openBox<String>(_boxName);
   }
 
-  /// For tests: use in-memory Hive
+  /// For tests: initializes Hive once with a unique temp directory,
+  /// then opens a fresh box cleared of any prior test data.
   Future<void> initForTest() async {
-    Hive.init('test_hive');
+    if (!_hiveInitialized) {
+      final tempDir = Directory.systemTemp.createTempSync('meloday_test_');
+      Hive.init(tempDir.path);
+      _hiveInitialized = true;
+    }
     _box = await Hive.openBox<String>('test_cards');
     await _box?.clear();
   }
