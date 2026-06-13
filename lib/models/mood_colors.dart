@@ -1,4 +1,6 @@
 class MoodColors {
+  const MoodColors._();
+
   static const Map<String, String> tagToColor = {
     '温暖': '#FF8C42',
     '快乐': '#FFD93D',

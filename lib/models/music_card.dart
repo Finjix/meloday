@@ -1,6 +1,6 @@
 class MusicCard {
   final String id;
-  String name;
+  final String name;
   final String summary;
   final String fullContent;
   final String coverImage;
@@ -9,7 +9,7 @@ class MusicCard {
   final List<String> tags;
   final String moodColor;
 
-  MusicCard({
+  const MusicCard({
     required this.id,
     required this.name,
     required this.summary,
@@ -20,6 +20,30 @@ class MusicCard {
     required this.tags,
     required this.moodColor,
   });
+
+  MusicCard copyWith({
+    String? id,
+    String? name,
+    String? summary,
+    String? fullContent,
+    String? coverImage,
+    String? musicFile,
+    DateTime? createdAt,
+    List<String>? tags,
+    String? moodColor,
+  }) {
+    return MusicCard(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      summary: summary ?? this.summary,
+      fullContent: fullContent ?? this.fullContent,
+      coverImage: coverImage ?? this.coverImage,
+      musicFile: musicFile ?? this.musicFile,
+      createdAt: createdAt ?? this.createdAt,
+      tags: tags ?? this.tags,
+      moodColor: moodColor ?? this.moodColor,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,

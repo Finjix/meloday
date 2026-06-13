@@ -21,7 +21,7 @@ void main() {
       expect(card.tags, ['温暖', '亲情']);
     });
 
-    test('name should be mutable', () {
+    test('copyWith should create a copy with updated name', () {
       final card = MusicCard(
         id: 'test-id',
         name: '原始名字',
@@ -34,8 +34,9 @@ void main() {
         moodColor: '#A0A0B0',
       );
 
-      card.name = '新名字';
-      expect(card.name, '新名字');
+      final newCard = card.copyWith(name: '新名字');
+      expect(card.name, '原始名字');
+      expect(newCard.name, '新名字');
     });
   });
 }
