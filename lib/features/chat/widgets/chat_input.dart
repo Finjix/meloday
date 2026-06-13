@@ -1,6 +1,7 @@
 // lib/features/chat/widgets/chat_input.dart
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+import '../../../core/glass_config.dart';
 
 class ChatInput extends StatefulWidget {
   final bool enabled;
@@ -38,7 +39,7 @@ class _ChatInputState extends State<ChatInput> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: GlassContainer(
         shape: const LiquidRoundedSuperellipse(borderRadius: 24),
-        settings: const LiquidGlassSettings(blur: 10),
+        settings: GlassConfig.input,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         child: Row(
           children: [

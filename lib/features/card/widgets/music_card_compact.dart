@@ -1,6 +1,7 @@
 // lib/features/card/widgets/music_card_compact.dart
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+import '../../../core/glass_config.dart';
 import '../../../models/music_card.dart';
 import '../../../core/theme.dart';
 
@@ -33,7 +34,7 @@ class MusicCardCompact extends StatelessWidget {
             width: 1,
           ),
         ),
-        settings: const LiquidGlassSettings(blur: 8),
+        settings: GlassConfig.card,
         padding: const EdgeInsets.all(10),
         child: Row(
           children: [

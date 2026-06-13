@@ -1,6 +1,7 @@
 // lib/app.dart
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+import 'core/glass_config.dart';
 import 'features/chat/pages/home_page.dart';
 import 'features/diary/pages/diary_page.dart';
 import 'features/profile/pages/profile_page.dart';
@@ -44,7 +45,7 @@ class _AppShellState extends State<AppShell> {
         padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
         child: GlassContainer(
           shape: const LiquidRoundedSuperellipse(borderRadius: 30),
-          settings: const LiquidGlassSettings(blur: 12),
+          settings: GlassConfig.navBar,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,

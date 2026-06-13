@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+import '../../../core/glass_config.dart';
 
 /// A glass morphism styled music player widget using audioplayers.
 ///
@@ -111,7 +112,7 @@ class _MusicPlayerState extends State<MusicPlayer> {
 
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 20),
-      settings: const LiquidGlassSettings(blur: 10),
+      settings: GlassConfig.card,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -167,9 +168,9 @@ class _MusicPlayerState extends State<MusicPlayer> {
             width: 64,
             height: 64,
             shape: const LiquidOval(
-              side: BorderSide(color: Color(0x33FFFFFF)),
+              side: BorderSide(color: GlassConfig.buttonRimWhite),
             ),
-            settings: const LiquidGlassSettings(blur: 12),
+            settings: GlassConfig.interactive,
             useOwnLayer: true,
             glowColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
             glowRadius: 1.2,

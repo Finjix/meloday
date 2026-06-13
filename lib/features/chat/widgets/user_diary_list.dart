@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+import '../../../core/glass_config.dart';
 import '../../../models/chat_message.dart';
 
 class UserDiaryList extends StatelessWidget {
@@ -52,7 +53,7 @@ class UserDiaryList extends StatelessWidget {
                 const SizedBox(height: 4),
                 GlassContainer(
                   shape: const LiquidRoundedSuperellipse(borderRadius: 16),
-                  settings: const LiquidGlassSettings(blur: 6),
+                  settings: GlassConfig.card,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 12,

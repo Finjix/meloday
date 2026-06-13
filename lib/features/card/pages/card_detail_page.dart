@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+import '../../../core/glass_config.dart';
 import '../../../core/theme.dart';
 import '../../../models/music_card.dart';
 import '../../diary/providers/diary_list_provider.dart';
@@ -128,7 +129,7 @@ class CardDetailPage extends ConsumerWidget {
             GlassContainer(
               shape:
                   const LiquidRoundedSuperellipse(borderRadius: 16),
-              settings: const LiquidGlassSettings(blur: 8),
+              settings: GlassConfig.card,
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: () => _showFullDiarySheet(context, card),
@@ -177,7 +178,7 @@ class CardDetailPage extends ConsumerWidget {
 
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 22),
-      settings: const LiquidGlassSettings(blur: 14),
+      settings: GlassConfig.surface,
       child: Container(
         height: 160,
         decoration: BoxDecoration(
@@ -202,7 +203,7 @@ class CardDetailPage extends ConsumerWidget {
   Widget _buildTag(String label, Color moodColor) {
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 12),
-      settings: const LiquidGlassSettings(blur: 5),
+      settings: GlassConfig.tag,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Text(
         '#$label',
@@ -330,7 +331,7 @@ class CardDetailPage extends ConsumerWidget {
         expand: false,
         builder: (ctx, scrollController) => GlassContainer(
           shape: const LiquidRoundedSuperellipse(borderRadius: 20),
-          settings: const LiquidGlassSettings(blur: 20),
+          settings: GlassConfig.sheet,
           margin: const EdgeInsets.all(8),
           child: Column(
             children: [

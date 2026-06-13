@@ -5,16 +5,20 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../models/music_card.dart';
 
 class StorageService {
-  static const String _boxName = 'cards';
+  static const String _cardsBoxName = 'cards';
+  static const String _settingsBoxName = 'settings';
+  static const String _themeColorKey = 'themeColor';
   static bool _hiveInitialized = false;
-  Box<String>? _box;
+  Box<String>? _cardsBox;
+  Box<String>? _settingsBox;
 
   Future<void> init() async {
     if (!_hiveInitialized) {
       await Hive.initFlutter();
       _hiveInitialized = true;
     }
-    _box = await Hive.openBox<String>(_boxName);
+    _cardsBox = await Hive.openBox<String>(_cardsBoxName);
+    _settingsBox = await Hive.openBox<String>(_settingsBoxName);
   }
 
   /// For tests: initializes Hive once with a unique temp directory,
@@ -25,18 +29,22 @@ class StorageService {
       Hive.init(tempDir.path);
       _hiveInitialized = true;
     }
-    _box = await Hive.openBox<String>('test_cards');
-    await _box?.clear();
+    _cardsBox = await Hive.openBox<String>('test_cards');
+    await _cardsBox?.clear();
+    _settingsBox = await Hive.openBox<String>('test_settings');
+    await _settingsBox?.clear();
   }
 
+  // ── Card CRUD ─────────────────────────────────────────────────────
+
   Future<void> saveCard(MusicCard card) async {
-    await _box?.put(card.id, _serialize(card));
+    await _cardsBox?.put(card.id, _serialize(card));
   }
 
   Future<List<MusicCard>> getAllCards() async {
     final cards = <MusicCard>[];
-    for (final key in _box?.keys ?? <dynamic>[]) {
-      final json = _box?.get(key);
+    for (final key in _cardsBox?.keys ?? <dynamic>[]) {
+      final json = _cardsBox?.get(key);
       if (json != null) cards.add(_deserialize(json));
     }
     cards.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -44,13 +52,13 @@ class StorageService {
   }
 
   Future<MusicCard?> getCard(String id) async {
-    final json = _box?.get(id);
+    final json = _cardsBox?.get(id);
     if (json == null) return null;
     return _deserialize(json);
   }
 
   Future<void> deleteCard(String id) async {
-    await _box?.delete(id);
+    await _cardsBox?.delete(id);
   }
 
   Future<void> updateCardName(String id, String newName) async {
@@ -59,6 +67,18 @@ class StorageService {
       await saveCard(card.copyWith(name: newName));
     }
   }
+
+  // ── Theme colour ──────────────────────────────────────────────────
+
+  Future<void> saveThemeColor(String hex) async {
+    await _settingsBox?.put(_themeColorKey, hex);
+  }
+
+  Future<String?> loadThemeColor() async {
+    return _settingsBox?.get(_themeColorKey);
+  }
+
+  // ── Serialization ─────────────────────────────────────────────────
 
   String _serialize(MusicCard card) {
     return jsonEncode(card.toJson());

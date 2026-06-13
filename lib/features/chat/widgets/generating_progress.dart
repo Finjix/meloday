@@ -1,6 +1,7 @@
 // lib/features/chat/widgets/generating_progress.dart
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+import '../../../core/glass_config.dart';
 import '../../../models/generating_progress.dart';
 
 class GeneratingProgressWidget extends StatelessWidget {
@@ -12,7 +13,7 @@ class GeneratingProgressWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 16),
-      settings: const LiquidGlassSettings(blur: 8),
+      settings: GlassConfig.card,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
