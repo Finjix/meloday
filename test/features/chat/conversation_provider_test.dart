@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:meloday/features/chat/providers/conversation_provider.dart';
@@ -12,6 +13,8 @@ Future<ProviderContainer> createTestContainer() async {
   return ProviderContainer(
     overrides: [
       storageServiceProvider.overrideWithValue(storageService),
+      themeAccentProvider.overrideWith((ref) => '#E88DAA'),
+      themeModeProvider.overrideWith((ref) => ThemeMode.light),
     ],
   );
 }

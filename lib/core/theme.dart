@@ -81,7 +81,4 @@ class AppTheme {
       fontFamily: 'Roboto',
     );
   }
-
-  static ThemeData get lightTheme => lightThemeFromColor(accent);
-  static ThemeData get darkTheme => darkThemeFromColor(accent);
 }
