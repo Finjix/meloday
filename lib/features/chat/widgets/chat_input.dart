@@ -35,11 +35,12 @@ class _ChatInputState extends State<ChatInput> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: GlassContainer(
         shape: const LiquidRoundedSuperellipse(borderRadius: 24),
-        settings: GlassConfig.input,
+        settings: isDark ? GlassConfig.darkInput : GlassConfig.input,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         child: Row(
           children: [

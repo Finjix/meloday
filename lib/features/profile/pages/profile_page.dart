@@ -84,7 +84,9 @@ class ProfilePage extends ConsumerWidget {
 
   void _onColorSelected(WidgetRef ref, String hex) {
     ref.read(themeAccentProvider.notifier).state = hex;
-    ref.read(storageServiceProvider).saveThemeColor(hex).catchError((_) {});
+    ref.read(storageServiceProvider).saveThemeColor(hex).catchError((e) {
+      debugPrint('Failed to save theme color: $e');
+    });
   }
 
   // ── Avatar (emoji in glass circle) ────────────────────────────────
@@ -356,7 +358,9 @@ class _DarkModeToggle extends ConsumerWidget {
             ref.read(themeModeProvider.notifier).state = newMode;
             ref.read(storageServiceProvider)
                 .saveThemeMode(value ? 'dark' : 'light')
-                .catchError((_) {});
+                .catchError((e) {
+                  debugPrint('Failed to save theme mode: $e');
+                });
           },
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),

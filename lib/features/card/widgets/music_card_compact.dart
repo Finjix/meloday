@@ -24,6 +24,7 @@ class MusicCardCompact extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: GlassContainer(
@@ -34,7 +35,7 @@ class MusicCardCompact extends StatelessWidget {
             width: 1,
           ),
         ),
-        settings: GlassConfig.card,
+        settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
         padding: const EdgeInsets.all(10),
         child: Row(
           children: [

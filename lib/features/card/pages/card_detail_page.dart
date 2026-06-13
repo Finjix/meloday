@@ -81,6 +81,7 @@ class CardDetailPage extends ConsumerWidget {
   }
 
   Scaffold _buildContent(BuildContext context, WidgetRef ref, MusicCard card) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final moodColor = AppTheme.moodColorFromHex(card.moodColor);
     final dateFormatted =
         DateFormat('yyyy年M月d日 HH:mm', 'zh_CN').format(card.createdAt);
@@ -94,7 +95,7 @@ class CardDetailPage extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Cover image area ──────────────────────────────────────
-            _buildCoverArea(moodColor),
+            _buildCoverArea(context, moodColor),
             const SizedBox(height: 24),
             // ── Card name ─────────────────────────────────────────────
             Text(
@@ -129,7 +130,7 @@ class CardDetailPage extends ConsumerWidget {
             GlassContainer(
               shape:
                   const LiquidRoundedSuperellipse(borderRadius: 16),
-              settings: GlassConfig.card,
+              settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: () => _showFullDiarySheet(context, card),
@@ -163,7 +164,7 @@ class CardDetailPage extends ConsumerWidget {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: card.tags.map((tag) => _buildTag(tag, moodColor)).toList(),
+              children: card.tags.map((tag) => _buildTag(context, tag, moodColor)).toList(),
             ),
             const SizedBox(height: 40),
           ],
@@ -173,12 +174,13 @@ class CardDetailPage extends ConsumerWidget {
   }
 
   // ── Cover area ──────────────────────────────────────────────────────
-  Widget _buildCoverArea(Color moodColor) {
+  Widget _buildCoverArea(BuildContext context, Color moodColor) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final gradientColors = AppTheme.gradientPairFromMood(moodColor);
 
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 22),
-      settings: GlassConfig.surface,
+      settings: isDark ? GlassConfig.darkSurface : GlassConfig.surface,
       child: Container(
         height: 160,
         decoration: BoxDecoration(
@@ -200,10 +202,11 @@ class CardDetailPage extends ConsumerWidget {
   }
 
   // ── Tag chip ────────────────────────────────────────────────────────
-  Widget _buildTag(String label, Color moodColor) {
+  Widget _buildTag(BuildContext context, String label, Color moodColor) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 12),
-      settings: GlassConfig.tag,
+      settings: isDark ? GlassConfig.darkTag : GlassConfig.tag,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Text(
         '#$label',
@@ -329,60 +332,62 @@ class CardDetailPage extends ConsumerWidget {
         minChildSize: 0.3,
         maxChildSize: 0.95,
         expand: false,
-        builder: (ctx, scrollController) => GlassContainer(
-          shape: const LiquidRoundedSuperellipse(borderRadius: 20),
-          settings: GlassConfig.sheet,
-          margin: const EdgeInsets.all(8),
-          child: Column(
-            children: [
-              // ── Drag handle ──────────────────────────────────────
-              const SizedBox(height: 12),
-              Container(
-                width: 40,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(3),
+        builder: (ctx, scrollController) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          return GlassContainer(
+            shape: const LiquidRoundedSuperellipse(borderRadius: 20),
+            settings: isDark ? GlassConfig.darkSheet : GlassConfig.sheet,
+            margin: const EdgeInsets.all(8),
+            child: Column(
+              children: [
+                // ── Drag handle ──────────────────────────────────────
+                const SizedBox(height: 12),
+                Container(
+                  width: 40,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              // ── Title ────────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Row(
-                  children: [
-                    Text(
-                      '📖 完整日记',
+                const SizedBox(height: 16),
+                // ── Title ────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    children: [
+                      Text(
+                        '📖 完整日记',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // ── Content ──────────────────────────────────────────
+                Expanded(
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      card.fullContent,
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurface,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        height: 1.8,
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              // ── Content ──────────────────────────────────────────
-              Expanded(
-                child: SingleChildScrollView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Text(
-                    card.fullContent,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
-                      fontSize: 15,
-                      height: 1.8,
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
-        ),
-      ),
-    );
+                const SizedBox(height: 24),
+              ],
+            ),
+          );
+        },
+    ));
   }
 }

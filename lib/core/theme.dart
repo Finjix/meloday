@@ -6,16 +6,11 @@ class AppTheme {
 
   // Light theme palette — scaffold background is now derived from accent
   static const Color surfaceLightMedium = Color(0xFFEDE4F0);
-  static const Color surfaceLightAccent = Color(0xFFE0D4E8);
-  static const Color textLightPrimary = Color(0xFF2D1B3E);
-  static const Color textLightSecondary = Color(0xFF7A6B8A);
 
   // Dark theme palette (legacy)
   static const Color surfaceDark = Color(0xFF1A1A2E);
   static const Color surfaceMedium = Color(0xFF16213E);
   static const Color surfaceLight = Color(0xFF0F3460);
-  static const Color textPrimary = Color(0xFFE8E8E8);
-  static const Color textSecondary = Color(0xFFA0A0B0);
 
   /// Legacy const accent (for fallback / backward compat).
   static const Color accent = Color(0xFFE88DAA);

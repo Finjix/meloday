@@ -29,8 +29,9 @@ void main() async {
   final storageService = StorageService();
   await storageService.init();
   final savedColor =
-      (await storageService.loadThemeColor()) ?? AppTheme.defaultAccentHex;
-  final savedMode = (await storageService.loadThemeMode()) ?? 'light';
+      await storageService.loadThemeColor() ?? AppTheme.defaultAccentHex;
+  final savedMode =
+      (await storageService.loadThemeMode()) ?? 'light';
   final initialMode = savedMode == 'dark' ? ThemeMode.dark : ThemeMode.light;
 
   runApp(
