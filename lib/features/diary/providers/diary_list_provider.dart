@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_initializing_formals
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/music_card.dart';
 import '../../../services/storage_service.dart';
