@@ -58,6 +58,9 @@ class ProfilePage extends ConsumerWidget {
                 onColorSelected: (hex) =>
                     _onColorSelected(ref, hex),
               ),
+              const SizedBox(height: 4),
+              // ── Dark mode toggle ────────────────────────────────────
+              _DarkModeToggle(),
               const SizedBox(height: 24),
               // ── Settings ───────────────────────────────────────────
               _Tile(
@@ -314,6 +317,45 @@ class _Tile extends StatelessWidget {
         trailing:
             Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
         onTap: onTap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Dark mode toggle
+// ──────────────────────────────────────────────────────────────────────
+
+class _DarkModeToggle extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeModeProvider);
+    final isDark = themeMode == ThemeMode.dark;
+
+    return GlassContainer(
+      shape: const LiquidRoundedSuperellipse(borderRadius: 14),
+      settings: GlassConfig.card,
+      child: ListTile(
+        leading: Icon(
+          isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+        title: Text(
+          '深色模式',
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+        ),
+        trailing: Switch(
+          value: isDark,
+          activeThumbColor: Theme.of(context).colorScheme.primary,
+          onChanged: (value) {
+            final newMode = value ? ThemeMode.dark : ThemeMode.light;
+            ref.read(themeModeProvider.notifier).state = newMode;
+            ref.read(storageServiceProvider).saveThemeMode(
+                  value ? 'dark' : 'light',
+                );
+          },
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );
