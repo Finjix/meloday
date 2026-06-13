@@ -50,16 +50,20 @@ class ProfilePage extends ConsumerWidget {
 
 /// Color palette entries: label → hex.
 /// Built from [MoodColors.tagToColor] plus a few extras not in the mood set.
-final _kColorPalette = <String, String>{
-  ...MoodColors.tagToColor,
-  '天空': '#64B5F6',
-  '优雅': '#CE93D8',
-  '热情': '#EF5350',
-  '梦幻': '#BA68C8',
-  '活力': '#FF7043',
-  '清新': '#4DB6AC',
-  '希望': '#AED581',
-};
+final _kColorPalette = <String>[
+  ...MoodColors.tagToColor.values,
+  '#00BCD4',
+  '#CE93D8',
+  '#EF5350',
+  '#AD1457',
+  '#FF7043',
+  '#C0CA33',
+  '#2E7D32',
+  '#1A237E',
+  '#FFB300',
+  '#827717',
+  '#EC407A',
+];
 
 class _ThemeColorPicker extends StatelessWidget {
   final String currentHex;
@@ -93,33 +97,22 @@ class _ThemeColorPicker extends StatelessWidget {
             ],
           ),
         ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final crossAxisCount = constraints.maxWidth > 600 ? 14 : 7;
-            return GridView.count(
-              crossAxisCount: crossAxisCount,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 10,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: EdgeInsets.zero,
-              children: _kColorPalette.entries.map((entry) {
-                final color = AppTheme.moodColorFromHex(entry.value);
-                final isSelected = entry.value.toUpperCase() == currentHex.toUpperCase();
-                return Center(
-                  child: SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: _ColorSwatch(
-                      color: color,
-                      isSelected: isSelected,
-                      onTap: () => onColorSelected(entry.value),
-                    ),
-                  ),
-                );
-              }).toList(),
+        Wrap(
+          spacing: 10,
+          runSpacing: 12,
+          children: _kColorPalette.map((hex) {
+            final color = AppTheme.moodColorFromHex(hex);
+            final isSelected = hex.toUpperCase() == currentHex.toUpperCase();
+            return SizedBox(
+              width: 40,
+              height: 40,
+              child: _ColorSwatch(
+                color: color,
+                isSelected: isSelected,
+                onTap: () => onColorSelected(hex),
+              ),
             );
-          },
+          }).toList(),
         ),
       ],
     );
@@ -174,14 +167,11 @@ class _ColorSwatch extends StatelessWidget {
 class _DarkModeToggle extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(themeModeProvider);
-    final isDark = themeMode == ThemeMode.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 14),
-      settings: isDark
-          ? GlassConfig.darkCard
-          : GlassConfig.card.copyWith(shadowElevation: 0),
+      settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
       child: ListTile(
         leading: Icon(
           isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
