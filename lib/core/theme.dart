@@ -51,6 +51,8 @@ class AppTheme {
         primary: accentColor,
         secondary: const Color(0xFF8B6BA0),
         surface: surfaceLightMedium,
+        onSurface: const Color(0xFF3C3C3C),
+        onSurfaceVariant: const Color(0xFF6B6B6B),
       ),
       fontFamily: 'Roboto',
     );

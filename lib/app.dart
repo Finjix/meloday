@@ -88,6 +88,7 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -98,7 +99,7 @@ class _NavItem extends StatelessWidget {
         height: 44,
         decoration: BoxDecoration(
           color: isSelected
-              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)
+              ? const Color(0xFF6B6B6B).withValues(alpha: isDark ? 0.2 : 0.05)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
         ),
