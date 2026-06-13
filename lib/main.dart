@@ -3,6 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'services/storage_service.dart';
+import 'features/card/pages/card_detail_page.dart';
 
 final storageServiceProvider = Provider<StorageService>((ref) {
   throw UnimplementedError('StorageService must be overridden in main');
@@ -34,6 +35,15 @@ class MainApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF1A1A2E),
       ),
       home: const AppShell(),
+      onGenerateRoute: (settings) {
+        if (settings.name == '/card') {
+          final cardId = settings.arguments as String;
+          return MaterialPageRoute(
+            builder: (_) => CardDetailPage(cardId: cardId),
+          );
+        }
+        return null;
+      },
     );
   }
 }
