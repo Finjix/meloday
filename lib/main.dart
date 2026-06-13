@@ -16,7 +16,7 @@ final themeAccentProvider = StateProvider<String>((ref) {
   throw UnimplementedError('themeAccentProvider must be overridden in main');
 });
 
-/// The current theme mode (light / dark / system).
+/// The current theme mode (light / dark).
 /// Loaded from storage in [main] and overridden before the app runs.
 final themeModeProvider = StateProvider<ThemeMode>((ref) {
   throw UnimplementedError('themeModeProvider must be overridden in main');

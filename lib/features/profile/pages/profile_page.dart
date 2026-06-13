@@ -29,7 +29,7 @@ class ProfilePage extends ConsumerWidget {
           child: Column(
             children: [
               // ── Avatar ─────────────────────────────────────────────
-              _buildAvatar(),
+              _buildAvatar(context),
               const SizedBox(height: 16),
               // ── Name ───────────────────────────────────────────────
               Text(
@@ -84,14 +84,15 @@ class ProfilePage extends ConsumerWidget {
 
   void _onColorSelected(WidgetRef ref, String hex) {
     ref.read(themeAccentProvider.notifier).state = hex;
-    ref.read(storageServiceProvider).saveThemeColor(hex);
+    ref.read(storageServiceProvider).saveThemeColor(hex).catchError((_) {});
   }
 
   // ── Avatar (emoji in glass circle) ────────────────────────────────
-  Widget _buildAvatar() {
+  Widget _buildAvatar(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 60),
-      settings: GlassConfig.interactive,
+      settings: isDark ? GlassConfig.darkInteractive : GlassConfig.interactive,
       padding: const EdgeInsets.all(20),
       child: const Text(
         '👤',
@@ -262,10 +263,11 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Expanded(
       child: GlassContainer(
         shape: const LiquidRoundedSuperellipse(borderRadius: 16),
-        settings: GlassConfig.card,
+        settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Column(
           children: [
@@ -305,9 +307,10 @@ class _Tile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 14),
-      settings: GlassConfig.card,
+      settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
       child: ListTile(
         leading: Icon(icon, color: Theme.of(context).colorScheme.onSurface),
         title: Text(
@@ -335,7 +338,7 @@ class _DarkModeToggle extends ConsumerWidget {
 
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 14),
-      settings: GlassConfig.card,
+      settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
       child: ListTile(
         leading: Icon(
           isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
@@ -351,9 +354,9 @@ class _DarkModeToggle extends ConsumerWidget {
           onChanged: (value) {
             final newMode = value ? ThemeMode.dark : ThemeMode.light;
             ref.read(themeModeProvider.notifier).state = newMode;
-            ref.read(storageServiceProvider).saveThemeMode(
-                  value ? 'dark' : 'light',
-                );
+            ref.read(storageServiceProvider)
+                .saveThemeMode(value ? 'dark' : 'light')
+                .catchError((_) {});
           },
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),

@@ -11,8 +11,6 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
-.CLAUDE.md
-.docs/superpowers/
 
 # IntelliJ related
 *.iml
