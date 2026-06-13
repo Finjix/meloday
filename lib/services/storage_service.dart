@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/music_card.dart';
 
@@ -23,7 +25,7 @@ class StorageService {
 
   Future<List<MusicCard>> getAllCards() async {
     final cards = <MusicCard>[];
-    for (final key in _box!.keys) {
+    for (final key in _box?.keys ?? <dynamic>[]) {
       final json = _box!.get(key);
       if (json != null) cards.add(_deserialize(json));
     }
@@ -49,21 +51,10 @@ class StorageService {
   }
 
   String _serialize(MusicCard card) {
-    return '${card.id}||${card.name}||${card.summary}||${card.fullContent}||${card.coverImage}||${card.musicFile}||${card.createdAt.toIso8601String()}||${card.tags.join(',')}||${card.moodColor}';
+    return jsonEncode(card.toJson());
   }
 
   MusicCard _deserialize(String raw) {
-    final parts = raw.split('||');
-    return MusicCard(
-      id: parts[0],
-      name: parts[1],
-      summary: parts[2],
-      fullContent: parts[3],
-      coverImage: parts[4],
-      musicFile: parts[5],
-      createdAt: DateTime.parse(parts[6]),
-      tags: parts[7].isEmpty ? [] : parts[7].split(','),
-      moodColor: parts[8],
-    );
+    return MusicCard.fromJson(jsonDecode(raw) as Map<String, dynamic>);
   }
 }
