@@ -199,7 +199,9 @@ class _DarkModeToggle extends ConsumerWidget {
   }
 }
 
-/// A custom toggle switch with no Material shadow/border artifacts.
+/// A minimal toggle switch designed to sit on a glass surface without
+/// competing with it — no glass gradient on the track, just a thin pill
+/// outline and a solid dot as the primary indicator.
 class _CustomSwitch extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
@@ -208,27 +210,49 @@ class _CustomSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = Theme.of(context).colorScheme.primary;
+
     return GestureDetector(
       onTap: () => onChanged(!value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+      child: Container(
         width: 52,
         height: 28,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
-          color: value ? color.withValues(alpha: 0.4) : Colors.grey.shade300,
+          color: value ? accent.withValues(alpha: 0.15) : Colors.transparent,
+          border: Border.all(
+            color: value
+                ? accent.withValues(alpha: 0.5)
+                : isDark
+                    ? Colors.white.withValues(alpha: 0.15)
+                    : Colors.black.withValues(alpha: 0.12),
+            width: 1.5,
+          ),
         ),
         padding: const EdgeInsets.all(2),
-        child: AnimatedAlign(
-          duration: const Duration(milliseconds: 200),
-          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+        child: Align(
+          alignment:
+              value ? Alignment.centerRight : Alignment.centerLeft,
           child: Container(
-            width: 24,
-            height: 24,
+            width: 22,
+            height: 22,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: value ? color : Colors.white,
+              color: value
+                  ? accent
+                  : isDark
+                      ? Colors.white.withValues(alpha: 0.35)
+                      : Colors.black.withValues(alpha: 0.18),
+              boxShadow: value
+                  ? [
+                      BoxShadow(
+                        color: accent.withValues(alpha: 0.4),
+                        blurRadius: 6,
+                        offset: const Offset(0, 1),
+                      ),
+                    ]
+                  : null,
             ),
           ),
         ),
