@@ -9,6 +9,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  liquid_glass_widgets:
+    git:
+      url: https://github.com/sdegenaar/liquid_glass_widgets
 
 dev_dependencies:
   flutter_test:
