@@ -7,8 +7,7 @@ import '../../../core/theme.dart';
 
 /// A compact music card widget for timeline lists.
 ///
-/// Row layout: cover thumbnail (left) + card name (center) + chevron (right).
-/// Uses a glossy glass container with a mood color border.
+/// Text-only row layout inside a glass container with a mood color border.
 class MusicCardCompact extends StatelessWidget {
   final MusicCard card;
   final VoidCallback? onTap;
@@ -39,9 +38,6 @@ class MusicCardCompact extends StatelessWidget {
         padding: const EdgeInsets.all(10),
         child: Row(
           children: [
-            // ── Cover thumbnail (gradient placeholder) ────────────────
-            _CoverThumbnail(moodColor: _moodColor),
-            const SizedBox(width: 12),
             // ── Card name ─────────────────────────────────────────────
             Expanded(
               child: Text(
@@ -55,13 +51,6 @@ class MusicCardCompact extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            const SizedBox(width: 4),
-            // ── Chevron ───────────────────────────────────────────────
-            Icon(
-              Icons.chevron_right_rounded,
-              color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-              size: 22,
-            ),
           ],
         ),
       ),
@@ -69,43 +58,3 @@ class MusicCardCompact extends StatelessWidget {
   }
 }
 
-/// A colorful gradient cover placeholder.
-///
-/// Generates a hue rotation from the mood color so every card gets a
-/// distinct gradient without needing to load an actual image yet.
-class _CoverThumbnail extends StatelessWidget {
-  final Color moodColor;
-
-  const _CoverThumbnail({required this.moodColor});
-
-  @override
-  Widget build(BuildContext context) {
-    final gradientColors = AppTheme.gradientPairFromMood(moodColor);
-
-    return Container(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: gradientColors,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: moodColor.withValues(alpha: 0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: const Center(
-        child: Text(
-          '🎵',
-          style: TextStyle(fontSize: 22),
-        ),
-      ),
-    );
-  }
-}

@@ -21,10 +21,6 @@ class AppTheme {
     return Color.lerp(accent, Colors.white, 0.85)!;
   }
 
-  static Color darkScaffoldBgFromAccent(Color accent) {
-    return Color.lerp(accent, surfaceDark, 0.90)!;
-  }
-
   static Color moodColorFromHex(String hex) {
     final color = int.tryParse(hex.replaceFirst('#', ''), radix: 16);
     if (color == null) return accent;
@@ -67,7 +63,7 @@ class AppTheme {
   static ThemeData darkThemeFromColor(Color accentColor) {
     return ThemeData(
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: darkScaffoldBgFromAccent(accentColor),
+      scaffoldBackgroundColor: Colors.black,
       colorScheme: ColorScheme.dark(
         primary: accentColor,
         secondary: surfaceLight,

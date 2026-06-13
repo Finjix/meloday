@@ -60,12 +60,13 @@ class MainApp extends ConsumerWidget {
       theme: AppTheme.lightThemeFromHex(accentHex),
       darkTheme: AppTheme.darkThemeFromHex(accentHex),
       themeMode: themeMode,
+      themeAnimationDuration: Duration.zero,
       home: const AppShell(),
       onGenerateRoute: (settings) {
         if (settings.name == '/card') {
           final cardId = settings.arguments as String;
           return MaterialPageRoute(
-            builder: (_) => CardDetailPage(cardId: cardId),
+            builder: (_) => CardDetailPage(cardId: cardId), 
           );
         }
         return null;

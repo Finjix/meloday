@@ -43,11 +43,6 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
-            '📔',
-            style: TextStyle(fontSize: 56),
-          ),
-          const SizedBox(height: 20),
           Text(
             '还没有日记',
             style: TextStyle(
@@ -58,7 +53,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '去首页写一篇吧 ✨',
+            '去首页写一篇吧',
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
               fontSize: 13,
@@ -205,15 +200,9 @@ class _TimelineRow extends StatelessWidget {
                         return false; // Let the provider handle removal
                       },
                       background: Container(
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 20),
                         decoration: BoxDecoration(
                           color: Colors.red.withValues(alpha: 0.8),
                           borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(
-                          Icons.delete_rounded,
-                          color: Colors.white,
                         ),
                       ),
                       child: MusicCardCompact(

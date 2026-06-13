@@ -6,19 +6,13 @@ import '../../../core/glass_config.dart';
 import '../../../core/theme.dart';
 import '../../../main.dart';
 import '../../../models/mood_colors.dart';
-import '../../diary/providers/diary_list_provider.dart';
 
-/// Profile page showing user avatar, stats, settings, and theme color picker.
-///
-/// Watches [diaryListProvider] for the total card count and displays it
-/// across three stat cards (日记 / 本月 / 连续 — all MVP placeholders).
+/// Profile page — theme color picker + dark mode toggle only.
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cardsAsync = ref.watch(diaryListProvider);
-    final totalCount = cardsAsync.whenOrNull(data: (cards) => cards.length) ?? 0;
     final currentAccentHex = ref.watch(themeAccentProvider);
 
     return Scaffold(
@@ -28,52 +22,12 @@ class ProfilePage extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
           child: Column(
             children: [
-              // ── Avatar ─────────────────────────────────────────────
-              _buildAvatar(context),
-              const SizedBox(height: 16),
-              // ── Name ───────────────────────────────────────────────
-              Text(
-                'Finjix 的音乐日记',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 28),
-              // ── Stat cards ─────────────────────────────────────────
-              Row(
-                children: [
-                  _StatCard(label: '日记', value: '$totalCount'),
-                  const SizedBox(width: 12),
-                  _StatCard(label: '本月', value: '$totalCount'),
-                  const SizedBox(width: 12),
-                  _StatCard(label: '连续', value: '$totalCount'),
-                ],
-              ),
-              const SizedBox(height: 32),
-              // ── Theme colour picker ───────────────────────────────
+              _DarkModeToggle(),
+              const SizedBox(height: 40),
               _ThemeColorPicker(
                 currentHex: currentAccentHex,
                 onColorSelected: (hex) =>
                     _onColorSelected(ref, hex),
-              ),
-              const SizedBox(height: 4),
-              // ── Dark mode toggle ────────────────────────────────────
-              _DarkModeToggle(),
-              const SizedBox(height: 24),
-              // ── Settings ───────────────────────────────────────────
-              _Tile(
-                icon: Icons.settings_rounded,
-                label: '设置',
-                onTap: () {}, // MVP: no action
-              ),
-              const SizedBox(height: 4),
-              // ── About ──────────────────────────────────────────────
-              _Tile(
-                icon: Icons.info_outline_rounded,
-                label: '关于',
-                onTap: () => _showAboutDialog(context),
               ),
             ],
           ),
@@ -88,47 +42,6 @@ class ProfilePage extends ConsumerWidget {
       debugPrint('Failed to save theme color: $e');
     });
   }
-
-  // ── Avatar (emoji in glass circle) ────────────────────────────────
-  Widget _buildAvatar(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return GlassContainer(
-      shape: const LiquidRoundedSuperellipse(borderRadius: 60),
-      settings: isDark ? GlassConfig.darkInteractive : GlassConfig.interactive,
-      padding: const EdgeInsets.all(20),
-      child: const Text(
-        '👤',
-        style: TextStyle(fontSize: 44),
-      ),
-    );
-  }
-
-  // ── About dialog ──────────────────────────────────────────────────
-  void _showAboutDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-        title: Text(
-          '关于 Meloday',
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-        ),
-        content: Text(
-          'Meloday · 音乐日记\n\n用音乐记录每一天的心情。',
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(
-              '好的',
-              style: TextStyle(color: Theme.of(context).colorScheme.primary),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -139,9 +52,13 @@ class ProfilePage extends ConsumerWidget {
 /// Built from [MoodColors.tagToColor] plus a few extras not in the mood set.
 final _kColorPalette = <String, String>{
   ...MoodColors.tagToColor,
-  '天空': '#64B5F6', // sky blue — extra
-  '优雅': '#CE93D8', // lavender — extra
-  '热情': '#EF5350', // red — extra
+  '天空': '#64B5F6',
+  '优雅': '#CE93D8',
+  '热情': '#EF5350',
+  '梦幻': '#BA68C8',
+  '活力': '#FF7043',
+  '清新': '#4DB6AC',
+  '希望': '#AED581',
 };
 
 class _ThemeColorPicker extends StatelessWidget {
@@ -176,19 +93,33 @@ class _ThemeColorPicker extends StatelessWidget {
             ],
           ),
         ),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: _kColorPalette.entries.map((entry) {
-            final color = AppTheme.moodColorFromHex(entry.value);
-            final isSelected = entry.value.toUpperCase() == currentHex.toUpperCase();
-            return _ColorSwatch(
-              color: color,
-              label: entry.key,
-              isSelected: isSelected,
-              onTap: () => onColorSelected(entry.value),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final crossAxisCount = constraints.maxWidth > 600 ? 14 : 7;
+            return GridView.count(
+              crossAxisCount: crossAxisCount,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 10,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: EdgeInsets.zero,
+              children: _kColorPalette.entries.map((entry) {
+                final color = AppTheme.moodColorFromHex(entry.value);
+                final isSelected = entry.value.toUpperCase() == currentHex.toUpperCase();
+                return Center(
+                  child: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: _ColorSwatch(
+                      color: color,
+                      isSelected: isSelected,
+                      onTap: () => onColorSelected(entry.value),
+                    ),
+                  ),
+                );
+              }).toList(),
             );
-          }).toList(),
+          },
         ),
       ],
     );
@@ -197,13 +128,11 @@ class _ThemeColorPicker extends StatelessWidget {
 
 class _ColorSwatch extends StatelessWidget {
   final Color color;
-  final String label;
   final bool isSelected;
   final VoidCallback onTap;
 
   const _ColorSwatch({
     required this.color,
-    required this.label,
     required this.isSelected,
     required this.onTap,
   });
@@ -212,117 +141,27 @@ class _ColorSwatch extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: isSelected ? 54 : 44,
-            height: isSelected ? 54 : 44,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              border: isSelected
-                  ? Border.all(color: Colors.white, width: 3)
-                  : null,
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: color.withValues(alpha: 0.4),
-                        blurRadius: 8,
-                        spreadRadius: 1,
-                      ),
-                    ]
-                  : null,
-            ),
-            child: isSelected
-                ? const Icon(Icons.check, color: Colors.white, size: 22)
+      child: AnimatedScale(
+        scale: isSelected ? 1.18 : 1.0,
+        duration: const Duration(milliseconds: 200),
+        child: Container(
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.4),
+                      blurRadius: 8,
+                      spreadRadius: 1,
+                    ),
+                  ]
                 : null,
           ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// Stat card
-// ──────────────────────────────────────────────────────────────────────
-
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _StatCard({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Expanded(
-      child: GlassContainer(
-        shape: const LiquidRoundedSuperellipse(borderRadius: 16),
-        settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Column(
-          children: [
-            Text(
-              value,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontSize: 13,
-              ),
-            ),
-          ],
+          child: isSelected
+              ? const Icon(Icons.check, color: Colors.white, size: 22)
+              : null,
         ),
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// Glass list tile (icon + label + chevron)
-// ──────────────────────────────────────────────────────────────────────
-
-class _Tile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _Tile({required this.icon, required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return GlassContainer(
-      shape: const LiquidRoundedSuperellipse(borderRadius: 14),
-      settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
-      child: ListTile(
-        leading: Icon(icon, color: Theme.of(context).colorScheme.onSurface),
-        title: Text(
-          label,
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-        ),
-        trailing:
-            Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
-        onTap: onTap,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );
   }
@@ -340,7 +179,9 @@ class _DarkModeToggle extends ConsumerWidget {
 
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 14),
-      settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
+      settings: isDark
+          ? GlassConfig.darkCard
+          : GlassConfig.card.copyWith(shadowElevation: 0),
       child: ListTile(
         leading: Icon(
           isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
@@ -350,9 +191,8 @@ class _DarkModeToggle extends ConsumerWidget {
           '深色模式',
           style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
         ),
-        trailing: Switch(
+        trailing: _CustomSwitch(
           value: isDark,
-          activeThumbColor: Theme.of(context).colorScheme.primary,
           onChanged: (value) {
             final newMode = value ? ThemeMode.dark : ThemeMode.light;
             ref.read(themeModeProvider.notifier).state = newMode;
@@ -364,6 +204,44 @@ class _DarkModeToggle extends ConsumerWidget {
           },
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
+  }
+}
+
+/// A custom toggle switch with no Material shadow/border artifacts.
+class _CustomSwitch extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _CustomSwitch({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 52,
+        height: 28,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          color: value ? color.withValues(alpha: 0.4) : Colors.grey.shade300,
+        ),
+        padding: const EdgeInsets.all(2),
+        child: AnimatedAlign(
+          duration: const Duration(milliseconds: 200),
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: value ? color : Colors.white,
+            ),
+          ),
+        ),
       ),
     );
   }
