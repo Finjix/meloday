@@ -21,7 +21,7 @@ final themeAccentProvider = StateProvider<String>((ref) {
 final themeModeProvider = StateProvider<ThemeMode>((ref) {
   throw UnimplementedError('themeModeProvider must be overridden in main');
 });
-
+ 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await LiquidGlassWidgets.initialize();

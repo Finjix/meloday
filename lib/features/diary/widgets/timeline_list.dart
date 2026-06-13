@@ -87,7 +87,7 @@ class _TimelineContent extends StatelessWidget {
     final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       itemCount: dateKeys.length,
       itemBuilder: (context, index) {
         final dateKey = dateKeys[index];

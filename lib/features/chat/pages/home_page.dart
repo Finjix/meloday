@@ -74,7 +74,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               AgentHeader(message: state.agentMessage),
             if (state.progress != null)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: GeneratingProgressWidget(progress: state.progress!),
               ),
           ],
@@ -87,7 +87,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           children: [
             if (state.currentCard != null)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: MusicCardCompact(
                   card: state.currentCard!,
                   onTap: () => Navigator.of(context).pushNamed(
@@ -109,7 +109,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             if (state.agentMessage != null)
               AgentHeader(message: state.agentMessage),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               child: Row(
                 children: [
                   Icon(Icons.error_outline, color: Theme.of(context).colorScheme.primary, size: 20),
@@ -170,8 +170,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                 height: 1,
                 thickness: 0.5,
-                indent: 16,
-                endIndent: 16,
+                indent: 20,
+                endIndent: 20,
               ),
 
             // ── Middle: User diary list ──────────────────────────────
@@ -183,9 +183,12 @@ class _HomePageState extends ConsumerState<HomePage> {
             ),
 
             // ── Bottom: Chat input ───────────────────────────────────
-            ChatInput(
-              enabled: !isDisabled,
-              onSend: _handleSend,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+              child: ChatInput(
+                enabled: !isDisabled,
+                onSend: _handleSend,
+              ),
             ),
           ],
         ),

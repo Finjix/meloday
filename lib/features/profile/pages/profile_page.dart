@@ -141,15 +141,6 @@ class _ColorSwatch extends StatelessWidget {
           decoration: BoxDecoration(
             color: color,
             shape: BoxShape.circle,
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.4),
-                      blurRadius: 8,
-                      spreadRadius: 1,
-                    ),
-                  ]
-                : null,
           ),
           child: isSelected
               ? const Icon(Icons.check, color: Colors.white, size: 22)
@@ -170,7 +161,7 @@ class _DarkModeToggle extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GlassContainer(
-      shape: const LiquidRoundedSuperellipse(borderRadius: 14),
+      shape: const LiquidRoundedSuperellipse(borderRadius: 999),
       settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
       child: ListTile(
         leading: Icon(

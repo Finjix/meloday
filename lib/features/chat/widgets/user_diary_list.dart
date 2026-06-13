@@ -19,20 +19,12 @@ class UserDiaryList extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     if (messages.isEmpty) {
-      return Center(
-        child: Text(
-          '写下今天的故事... ✍️',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-            fontSize: 14,
-          ),
-        ),
-      );
+      return const SizedBox.shrink();
     }
 
     return ListView.builder(
       controller: scrollController,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       itemCount: messages.length,
       itemBuilder: (context, index) {
         final msg = messages[index];
@@ -53,10 +45,10 @@ class UserDiaryList extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 GlassContainer(
-                  shape: const LiquidRoundedSuperellipse(borderRadius: 16),
+                  shape: const LiquidRoundedSuperellipse(borderRadius: 999),
                   settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
+                    horizontal: 20,
                     vertical: 12,
                   ),
                   child: Text(

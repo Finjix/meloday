@@ -8,8 +8,9 @@ import 'features/profile/pages/profile_page.dart';
 
 /// Root app shell with a glass bottom navigation bar.
 ///
-/// Uses [IndexedStack] to preserve page state across tab switches, and an
-/// [AnimatedContainer]-driven pill highlight for the selected nav item.
+/// Uses [IndexedStack] for instant page switching and a
+/// [SpringBuilder]-driven sliding pill highlight with spring physics from the
+/// liquid glass library for smooth tab transitions.
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
@@ -26,6 +27,12 @@ class _AppShellState extends State<AppShell> {
     ProfilePage(),
   ];
 
+  static const _icons = [
+    Icons.home_rounded,
+    Icons.menu_book_rounded,
+    Icons.person_rounded,
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -38,77 +45,72 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  /// Fixed width of the selection pill highlight.
+  static const double _pillWidth = 44;
+
   // ── Glass capsule bottom nav ────────────────────────────────────
   Widget _buildBottomNav() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final tabCount = _icons.length;
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: GlassContainer(
-          shape: const LiquidRoundedSuperellipse(borderRadius: 30),
+          shape: const LiquidRoundedSuperellipse(borderRadius: 999),
           settings: isDark ? GlassConfig.darkNavBar : GlassConfig.navBar,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _NavItem(
-                icon: Icons.home_rounded,
-                isSelected: _currentIndex == 0,
-                onTap: () => setState(() => _currentIndex = 0),
-              ),
-              _NavItem(
-                icon: Icons.menu_book_rounded,
-                isSelected: _currentIndex == 1,
-                onTap: () => setState(() => _currentIndex = 1),
-              ),
-              _NavItem(
-                icon: Icons.person_rounded,
-                isSelected: _currentIndex == 2,
-                onTap: () => setState(() => _currentIndex = 2),
-              ),
-            ],
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final tabW = constraints.maxWidth / tabCount;
+              return SizedBox(
+                height: _pillWidth,
+                child: Stack(
+                  children: [
+                    // ── Sliding indicator with spring animation ──────────
+                    AnimatedPositioned(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOutCubic,
+                      left: _currentIndex * tabW + (tabW - _pillWidth) / 2,
+                      top: 0,
+                      bottom: 0,
+                      width: _pillWidth,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6B6B6B).withValues(
+                            alpha: isDark ? 0.2 : 0.05,
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                    // ── Tab tap targets ────────────────────────────────
+                    Row(
+                      children: [
+                        for (int i = 0; i < tabCount; i++)
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setState(() => _currentIndex = i),
+                              behavior: HitTestBehavior.opaque,
+                              child: Center(
+                                child: Icon(
+                                  _icons[i],
+                                  color: _currentIndex == i
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                  size: 24,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Individual nav item with animated selection highlight ────────────
-class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _NavItem({
-    required this.icon,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutCubic,
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFF6B6B6B).withValues(alpha: isDark ? 0.2 : 0.05)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Icon(
-          icon,
-          color: isSelected
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.onSurfaceVariant,
-          size: 24,
         ),
       ),
     );

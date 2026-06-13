@@ -28,7 +28,7 @@ class MusicCardCompact extends StatelessWidget {
       onTap: onTap,
       child: GlassContainer(
         shape: LiquidRoundedSuperellipse(
-          borderRadius: 14,
+          borderRadius: 999,
           side: BorderSide(
             color: _moodColor.withValues(alpha: 0.4),
             width: 1,

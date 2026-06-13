@@ -13,43 +13,46 @@ class AgentHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Agent avatar — circular glass container
+          // Agent avatar — pill shape on the left
           GlassContainer(
             width: 48,
             height: 48,
-            shape: LiquidOval(
-              side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-            ),
+            shape: const LiquidRoundedSuperellipse(borderRadius: 999),
             settings: isDark ? GlassConfig.darkInteractive : GlassConfig.interactive,
             child: const Center(
-              child: Text('🤖', style: TextStyle(fontSize: 24)),
+              child: Text('😊', style: TextStyle(fontSize: 24)),
             ),
           ),
           const SizedBox(width: 12),
-          // Agent message bubble
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: message != null
-                  ? GlassContainer(
-                      key: ValueKey(message!.id),
-                      shape: const LiquidRoundedSuperellipse(borderRadius: 16),
-                      settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
-                      padding: const EdgeInsets.all(14),
-                      child: Text(
-                        message!.content,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurface,
-                          fontSize: 15,
-                          height: 1.5,
+          // Agent message bubble — adapts to content width
+          Flexible(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.72,
+              ),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: message != null
+                    ? GlassContainer(
+                        key: ValueKey(message!.id),
+                        shape: const LiquidRoundedSuperellipse(borderRadius: 999),
+                        settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
+                        padding: const EdgeInsets.all(14),
+                        child: Text(
+                          message!.content,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurface,
+                            fontSize: 15,
+                            height: 1.5,
+                          ),
                         ),
-                      ),
-                    )
-                  : const SizedBox.shrink(),
+                      )
+                    : const SizedBox.shrink(),
+              ),
             ),
           ),
         ],
