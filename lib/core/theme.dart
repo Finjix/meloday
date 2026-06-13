@@ -26,6 +26,10 @@ class AppTheme {
     return Color.lerp(accent, Colors.white, 0.85)!;
   }
 
+  static Color darkScaffoldBgFromAccent(Color accent) {
+    return Color.lerp(accent, surfaceDark, 0.90)!;
+  }
+
   static Color moodColorFromHex(String hex) {
     final color = int.tryParse(hex.replaceFirst('#', ''), radix: 16);
     if (color == null) return accent;
@@ -61,16 +65,23 @@ class AppTheme {
     );
   }
 
-  static ThemeData get lightTheme => lightThemeFromColor(accent);
+  static ThemeData darkThemeFromHex(String accentHex) {
+    return darkThemeFromColor(moodColorFromHex(accentHex));
+  }
 
-  static ThemeData get darkTheme => ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: surfaceDark,
-        colorScheme: const ColorScheme.dark(
-          primary: accent,
-          secondary: surfaceLight,
-          surface: surfaceMedium,
-        ),
-        fontFamily: 'Roboto',
-      );
+  static ThemeData darkThemeFromColor(Color accentColor) {
+    return ThemeData(
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: darkScaffoldBgFromAccent(accentColor),
+      colorScheme: ColorScheme.dark(
+        primary: accentColor,
+        secondary: surfaceLight,
+        surface: surfaceMedium,
+      ),
+      fontFamily: 'Roboto',
+    );
+  }
+
+  static ThemeData get lightTheme => lightThemeFromColor(accent);
+  static ThemeData get darkTheme => darkThemeFromColor(accent);
 }
