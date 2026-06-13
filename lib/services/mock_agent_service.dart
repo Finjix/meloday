@@ -5,6 +5,9 @@ class MockAgentService {
 
   int _agentRound = 0;
 
+  /// The number of agent responses sent so far in this conversation.
+  int get agentRounds => _agentRound;
+
   static const _greetings = [
     '嗨！今天过得怎么样？有什么想和我分享的吗？ 🌸',
     '你好呀～今天有什么故事想要记录下来吗？ ✨',

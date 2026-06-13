@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
+import 'core/theme.dart';
 import 'services/storage_service.dart';
 import 'features/card/pages/card_detail_page.dart';
 
@@ -30,9 +31,7 @@ class MainApp extends StatelessWidget {
     return MaterialApp(
       title: 'Meloday',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF1A1A2E),
-      ),
+      theme: AppTheme.darkTheme,
       home: const AppShell(),
       onGenerateRoute: (settings) {
         if (settings.name == '/card') {

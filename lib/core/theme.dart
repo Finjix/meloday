@@ -14,6 +14,16 @@ class AppTheme {
     return Color(color | 0xFF000000);
   }
 
+  /// Returns a two-color gradient pair derived from [color] for use in
+  /// cover images and thumbnails. First color is lighter, second is darker.
+  static List<Color> gradientPairFromMood(Color color) {
+    final hsl = HSLColor.fromColor(color);
+    return [
+      hsl.withLightness(0.55).withSaturation(0.8).toColor(),
+      hsl.withLightness(0.35).withSaturation(0.6).toColor(),
+    ];
+  }
+
   static ThemeData get darkTheme => ThemeData(
     brightness: Brightness.dark,
     scaffoldBackgroundColor: surfaceDark,

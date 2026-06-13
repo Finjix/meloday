@@ -173,9 +173,7 @@ class CardDetailPage extends ConsumerWidget {
 
   // ── Cover area ──────────────────────────────────────────────────────
   Widget _buildCoverArea(Color moodColor) {
-    final hsl = HSLColor.fromColor(moodColor);
-    final topColor = hsl.withLightness(0.55).withSaturation(0.8).toColor();
-    final bottomColor = hsl.withLightness(0.35).withSaturation(0.6).toColor();
+    final gradientColors = AppTheme.gradientPairFromMood(moodColor);
 
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 22),
@@ -187,7 +185,7 @@ class CardDetailPage extends ConsumerWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [topColor, bottomColor],
+            colors: gradientColors,
           ),
         ),
         child: Center(
@@ -218,10 +216,10 @@ class CardDetailPage extends ConsumerWidget {
   }
 
   // ── Rename dialog ───────────────────────────────────────────────────
-  void _showRenameDialog(
-      BuildContext context, WidgetRef ref, MusicCard card) {
+  Future<void> _showRenameDialog(
+      BuildContext context, WidgetRef ref, MusicCard card) async {
     final controller = TextEditingController(text: card.name);
-    showDialog(
+    await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.surfaceMedium,
@@ -259,14 +257,15 @@ class CardDetailPage extends ConsumerWidget {
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               final newName = controller.text.trim();
               if (newName.isNotEmpty && newName != card.name) {
-                ref
+                await ref
                     .read(diaryListProvider.notifier)
                     .renameCard(card.id, newName);
+                ref.invalidate(musicCardProvider(card.id));
               }
-              Navigator.of(ctx).pop();
+              if (ctx.mounted) Navigator.of(ctx).pop();
             },
             child: const Text(
               '确认',
@@ -276,6 +275,7 @@ class CardDetailPage extends ConsumerWidget {
         ],
       ),
     );
+    controller.dispose();
   }
 
   // ── Delete confirmation dialog ──────────────────────────────────────
@@ -302,10 +302,10 @@ class CardDetailPage extends ConsumerWidget {
             ),
           ),
           TextButton(
-            onPressed: () {
-              ref.read(diaryListProvider.notifier).deleteCard(card.id);
-              Navigator.of(ctx).pop(); // close dialog
-              Navigator.of(context).pop(); // go back to previous page
+            onPressed: () async {
+              await ref.read(diaryListProvider.notifier).deleteCard(card.id);
+              if (ctx.mounted) Navigator.of(ctx).pop();
+              if (context.mounted) Navigator.of(context).pop();
             },
             child: const Text(
               '删除',

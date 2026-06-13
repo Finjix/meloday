@@ -1,6 +1,8 @@
 // ignore_for_file: prefer_initializing_formals
 
 import 'dart:async';
+import 'package:characters/characters.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../../models/chat_message.dart';
@@ -13,6 +15,7 @@ import '../../../services/mock_music_service.dart';
 import '../../../services/mock_image_service.dart';
 import '../../../services/storage_service.dart';
 import '../../../main.dart';
+import '../../diary/providers/diary_list_provider.dart';
 
 final mockAgentServiceProvider = Provider<MockAgentService>((ref) {
   return MockAgentService();
@@ -33,6 +36,7 @@ final conversationProvider =
     musicService: ref.watch(mockMusicServiceProvider),
     imageService: ref.watch(mockImageServiceProvider),
     storageService: ref.watch(storageServiceProvider),
+    onCardCreated: () => ref.read(diaryListProvider.notifier).loadCards(),
   );
 });
 
@@ -41,18 +45,30 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
   final MockMusicService _musicService;
   final MockImageService _imageService;
   final StorageService _storageService;
+  final void Function()? _onCardCreated;
   final _uuid = const Uuid();
+
+  /// Whether this notifier is still active. Set to false in [dispose].
+  bool _active = true;
 
   ConversationNotifier({
     required MockAgentService agentService,
     required MockMusicService musicService,
     required MockImageService imageService,
     required StorageService storageService,
+    void Function()? onCardCreated,
   })  : _agentService = agentService,
         _musicService = musicService,
         _imageService = imageService,
         _storageService = storageService,
+        _onCardCreated = onCardCreated,
         super(const ConversationState());
+
+  @override
+  void dispose() {
+    _active = false;
+    super.dispose();
+  }
 
   void startConversation() {
     _agentService.reset();
@@ -84,9 +100,14 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
     // Simulate agent thinking delay
     await Future.delayed(const Duration(milliseconds: 400));
 
-    final agentRounds = state.userMessages.length;
-    final shouldGenerate =
-        _agentService.isInfoComplete(state.userMessages.length, agentRounds);
+    // Guard against state mutation after dispose
+    if (!_active) return;
+
+    // Use the agent's internal round counter, not user message count
+    final shouldGenerate = _agentService.isInfoComplete(
+      state.userMessages.length,
+      _agentService.agentRounds,
+    );
 
     if (shouldGenerate) {
       await _startGenerating();
@@ -104,12 +125,14 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
   }
 
   Future<void> _startGenerating() async {
+    final totalSteps = GeneratingProgress.stepNames.length;
+
     state = state.copyWith(
       status: ConvStatus.generating,
-      progress: const GeneratingProgress(
+      progress: GeneratingProgress(
         currentStep: 1,
-        totalSteps: 4,
-        stepName: '分析心情',
+        totalSteps: totalSteps,
+        stepName: GeneratingProgress.stepNames[0],
       ),
       agentMessage: ChatMessage(
         id: _uuid.v4(),
@@ -122,21 +145,23 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
     try {
       // Step 1 → 2
       await Future.delayed(const Duration(seconds: 1));
+      if (!_active) return;
       state = state.copyWith(
-        progress: const GeneratingProgress(
+        progress: GeneratingProgress(
           currentStep: 2,
-          totalSteps: 4,
-          stepName: '编写提示词',
+          totalSteps: totalSteps,
+          stepName: GeneratingProgress.stepNames[1],
         ),
       );
 
       // Step 2 → 3
       await Future.delayed(const Duration(seconds: 1));
+      if (!_active) return;
       state = state.copyWith(
-        progress: const GeneratingProgress(
+        progress: GeneratingProgress(
           currentStep: 3,
-          totalSteps: 4,
-          stepName: '生成音乐',
+          totalSteps: totalSteps,
+          stepName: GeneratingProgress.stepNames[2],
         ),
       );
 
@@ -148,13 +173,14 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
         prompt: userText,
         mood: moodTags.first,
       );
+      if (!_active) return;
 
       // Step 3 → 4
       state = state.copyWith(
-        progress: const GeneratingProgress(
+        progress: GeneratingProgress(
           currentStep: 4,
-          totalSteps: 4,
-          stepName: '匹配封面',
+          totalSteps: totalSteps,
+          stepName: GeneratingProgress.stepNames[3],
         ),
       );
 
@@ -163,8 +189,10 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
         tags: moodTags,
         userMessages: userText,
       );
+      if (!_active) return;
 
       await Future.delayed(const Duration(milliseconds: 500));
+      if (!_active) return;
 
       // Create card
       final card = MusicCard(
@@ -181,6 +209,10 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
 
       // Save card
       await _storageService.saveCard(card);
+      if (!_active) return;
+
+      // Notify listeners so diary list refreshes
+      _onCardCreated?.call();
 
       state = state.copyWith(
         status: ConvStatus.cardReady,
@@ -195,7 +227,8 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
           cardId: card.id,
         ),
       );
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('Meloday: card generation failed: $e\n$st');
       state = state.copyWith(
         status: ConvStatus.error,
         errorMessage: '创作失败了，让我再试一次好吗？',
@@ -212,7 +245,6 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
   }
 
   void resetConversation() {
-    _agentService.reset();
     state = const ConversationState();
     startConversation();
   }
@@ -240,8 +272,9 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
   }
 
   String _generateSummary(String userText) {
-    if (userText.length <= 50) return userText;
-    return '${userText.substring(0, 50)}...';
+    final chars = userText.characters;
+    if (chars.length <= 50) return userText;
+    return '${chars.take(50)}...';
   }
 
   String _generateFullContent(String userText) {

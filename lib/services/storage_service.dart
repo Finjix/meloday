@@ -10,7 +10,10 @@ class StorageService {
   Box<String>? _box;
 
   Future<void> init() async {
-    await Hive.initFlutter();
+    if (!_hiveInitialized) {
+      await Hive.initFlutter();
+      _hiveInitialized = true;
+    }
     _box = await Hive.openBox<String>(_boxName);
   }
 
@@ -33,7 +36,7 @@ class StorageService {
   Future<List<MusicCard>> getAllCards() async {
     final cards = <MusicCard>[];
     for (final key in _box?.keys ?? <dynamic>[]) {
-      final json = _box!.get(key);
+      final json = _box?.get(key);
       if (json != null) cards.add(_deserialize(json));
     }
     cards.sort((a, b) => b.createdAt.compareTo(a.createdAt));

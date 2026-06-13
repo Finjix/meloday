@@ -30,12 +30,29 @@ class DiaryListNotifier extends StateNotifier<AsyncValue<List<MusicCard>>> {
   }
 
   Future<void> deleteCard(String id) async {
-    await _storageService.deleteCard(id);
-    await loadCards();
+    // Optimistic removal
+    final prev = state.valueOrNull;
+    if (prev != null) {
+      state = AsyncValue.data(prev.where((c) => c.id != id).toList());
+    }
+    try {
+      await _storageService.deleteCard(id);
+    } catch (_) {
+      await loadCards(); // rollback to storage truth
+    }
   }
 
   Future<void> renameCard(String id, String newName) async {
-    await _storageService.updateCardName(id, newName);
-    await loadCards();
+    // Optimistic rename
+    final prev = state.valueOrNull;
+    if (prev != null) {
+      state = AsyncValue.data(prev.map((c) =>
+        c.id == id ? c.copyWith(name: newName) : c).toList());
+    }
+    try {
+      await _storageService.updateCardName(id, newName);
+    } catch (_) {
+      await loadCards(); // rollback to storage truth
+    }
   }
 }

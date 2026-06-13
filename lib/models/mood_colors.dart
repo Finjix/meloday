@@ -15,7 +15,8 @@ class MoodColors {
 
   static String fromTags(List<String> tags) {
     for (final tag in tags) {
-      if (tagToColor.containsKey(tag)) return tagToColor[tag]!;
+      final color = tagToColor[tag];
+      if (color != null) return color;
     }
     return defaultColor;
   }

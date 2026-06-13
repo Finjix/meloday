@@ -200,6 +200,10 @@ class _TimelineRow extends StatelessWidget {
                     child: Dismissible(
                       key: Key('timeline_dismiss_${card.id}'),
                       direction: DismissDirection.endToStart,
+                      confirmDismiss: (_) async {
+                        onDelete(card.id);
+                        return false; // Let the provider handle removal
+                      },
                       background: Container(
                         alignment: Alignment.centerRight,
                         padding: const EdgeInsets.only(right: 20),
@@ -212,7 +216,6 @@ class _TimelineRow extends StatelessWidget {
                           color: Colors.white,
                         ),
                       ),
-                      onDismissed: (_) => onDelete(card.id),
                       child: MusicCardCompact(
                         card: card,
                         onTap: () => onCardTap(card.id),

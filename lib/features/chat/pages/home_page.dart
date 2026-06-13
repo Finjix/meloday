@@ -143,6 +143,11 @@ class _HomePageState extends ConsumerState<HomePage> {
   Widget build(BuildContext context) {
     final state = ref.watch(conversationProvider);
 
+    // Reset scroll tracking when conversation restarts
+    if (state.status == ConvStatus.idle) {
+      _lastMessageCount = 0;
+    }
+
     // Auto-scroll when a new user message is added.
     if (state.userMessages.length > _lastMessageCount) {
       _lastMessageCount = state.userMessages.length;
@@ -153,7 +158,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     final isDisabled = state.status == ConvStatus.generating;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: AppTheme.surfaceDark,
       body: SafeArea(
         child: Column(
           children: [

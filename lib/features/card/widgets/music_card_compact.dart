@@ -78,9 +78,7 @@ class _CoverThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hsl = HSLColor.fromColor(moodColor);
-    final topColor = hsl.withLightness(0.55).withSaturation(0.8).toColor();
-    final bottomColor = hsl.withLightness(0.35).withSaturation(0.6).toColor();
+    final gradientColors = AppTheme.gradientPairFromMood(moodColor);
 
     return Container(
       width: 48,
@@ -90,7 +88,7 @@ class _CoverThumbnail extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [topColor, bottomColor],
+          colors: gradientColors,
         ),
         boxShadow: [
           BoxShadow(

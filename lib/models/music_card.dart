@@ -45,17 +45,19 @@ class MusicCard {
     );
   }
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'summary': summary,
-        'fullContent': fullContent,
-        'coverImage': coverImage,
-        'musicFile': musicFile,
-        'createdAt': createdAt.toIso8601String(),
-        'tags': tags,
-        'moodColor': moodColor,
-      };
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'summary': summary,
+      'fullContent': fullContent,
+      'coverImage': coverImage,
+      'musicFile': musicFile,
+      'createdAt': createdAt.toIso8601String(),
+      'tags': tags,
+      'moodColor': moodColor,
+    };
+  }
 
   factory MusicCard.fromJson(Map<String, dynamic> json) => MusicCard(
         id: json['id'] as String,
