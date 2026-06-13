@@ -40,12 +40,13 @@ class _AppShellState extends State<AppShell> {
 
   // ── Glass capsule bottom nav ────────────────────────────────────
   Widget _buildBottomNav() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
         child: GlassContainer(
           shape: const LiquidRoundedSuperellipse(borderRadius: 30),
-          settings: GlassConfig.navBar,
+          settings: isDark ? GlassConfig.darkNavBar : GlassConfig.navBar,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
