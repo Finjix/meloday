@@ -1,7 +1,6 @@
 // lib/features/chat/pages/home_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/theme.dart';
 import '../../../models/conversation_state.dart';
 import '../providers/conversation_provider.dart';
 import '../widgets/agent_header.dart';
@@ -113,22 +112,22 @@ class _HomePageState extends ConsumerState<HomePage> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline, color: AppTheme.accent, size: 20),
+                  Icon(Icons.error_outline, color: Theme.of(context).colorScheme.primary, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       state.errorMessage ?? '出了点问题',
-                      style: const TextStyle(
-                        color: AppTheme.accent,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
                         fontSize: 14,
                       ),
                     ),
                   ),
                   TextButton(
                     onPressed: _handleRetry,
-                    child: const Text(
+                    child: Text(
                       '重试',
-                      style: TextStyle(color: AppTheme.accent, fontSize: 14),
+                      style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 14),
                     ),
                   ),
                 ],
@@ -158,7 +157,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     final isDisabled = state.status == ConvStatus.generating;
 
     return Scaffold(
-      backgroundColor: AppTheme.surfaceDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
@@ -167,8 +166,8 @@ class _HomePageState extends ConsumerState<HomePage> {
 
             // ── Divider (only when user has messages) ────────────────
             if (showDivider)
-              const Divider(
-                color: AppTheme.textSecondary,
+              Divider(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 height: 1,
                 thickness: 0.5,
                 indent: 16,

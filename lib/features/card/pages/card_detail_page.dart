@@ -19,31 +19,31 @@ class CardDetailPage extends ConsumerWidget {
 
     return cardAsync.when(
       loading: () => Scaffold(
-        backgroundColor: AppTheme.surfaceDark,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: _buildAppBar(context, ref, null),
-        body: const Center(
-          child: CircularProgressIndicator(color: AppTheme.accent),
+        body: Center(
+          child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
         ),
       ),
       error: (error, _) => Scaffold(
-        backgroundColor: AppTheme.surfaceDark,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: _buildAppBar(context, ref, null),
         body: Center(
           child: Text(
             '加载失败: $error',
-            style: const TextStyle(color: AppTheme.textSecondary),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),
       ),
       data: (card) {
         if (card == null) {
           return Scaffold(
-            backgroundColor: AppTheme.surfaceDark,
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
             appBar: _buildAppBar(context, ref, null),
-            body: const Center(
+            body: Center(
               child: Text(
                 '卡片未找到',
-                style: TextStyle(color: AppTheme.textSecondary),
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
             ),
           );
@@ -58,19 +58,19 @@ class CardDetailPage extends ConsumerWidget {
       backgroundColor: Colors.transparent,
       elevation: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_rounded, color: AppTheme.textPrimary),
+        icon: Icon(Icons.arrow_back_rounded, color: Theme.of(context).colorScheme.onSurface),
         onPressed: () => Navigator.of(context).pop(),
       ),
       actions: [
         if (card != null) ...[
           IconButton(
-            icon: const Icon(Icons.edit_rounded, color: AppTheme.textPrimary),
+            icon: Icon(Icons.edit_rounded, color: Theme.of(context).colorScheme.onSurface),
             tooltip: '重命名',
             onPressed: () => _showRenameDialog(context, ref, card),
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline_rounded,
-                color: AppTheme.accent),
+            icon: Icon(Icons.delete_outline_rounded,
+                color: Theme.of(context).colorScheme.primary),
             tooltip: '删除',
             onPressed: () => _showDeleteDialog(context, ref, card),
           ),
@@ -85,7 +85,7 @@ class CardDetailPage extends ConsumerWidget {
         DateFormat('yyyy年M月d日 HH:mm', 'zh_CN').format(card.createdAt);
 
     return Scaffold(
-      backgroundColor: AppTheme.surfaceDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: _buildAppBar(context, ref, card),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -98,8 +98,8 @@ class CardDetailPage extends ConsumerWidget {
             // ── Card name ─────────────────────────────────────────────
             Text(
               card.name,
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
@@ -108,8 +108,8 @@ class CardDetailPage extends ConsumerWidget {
             // ── Date ──────────────────────────────────────────────────
             Text(
               dateFormatted,
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: 14,
               ),
             ),
@@ -117,8 +117,8 @@ class CardDetailPage extends ConsumerWidget {
             // ── Summary ───────────────────────────────────────────────
             Text(
               card.summary,
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
                 fontSize: 16,
                 height: 1.6,
               ),
@@ -222,38 +222,38 @@ class CardDetailPage extends ConsumerWidget {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surfaceMedium,
-        title: const Text(
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+        title: Text(
           '重命名音乐卡片',
-          style: TextStyle(color: AppTheme.textPrimary),
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
         ),
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(color: AppTheme.textPrimary),
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
           decoration: InputDecoration(
             hintText: '输入新名称',
-            hintStyle: const TextStyle(color: AppTheme.textSecondary),
+            hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
-                  color: AppTheme.textSecondary.withValues(alpha: 0.3)),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide:
-                  const BorderSide(color: AppTheme.accent),
+                  BorderSide(color: Theme.of(context).colorScheme.primary),
             ),
             filled: true,
-            fillColor: AppTheme.surfaceDark,
+            fillColor: Theme.of(context).scaffoldBackgroundColor,
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text(
+            child: Text(
               '取消',
-              style: TextStyle(color: AppTheme.textSecondary),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ),
           TextButton(
@@ -267,9 +267,9 @@ class CardDetailPage extends ConsumerWidget {
               }
               if (ctx.mounted) Navigator.of(ctx).pop();
             },
-            child: const Text(
+            child: Text(
               '确认',
-              style: TextStyle(color: AppTheme.accent),
+              style: TextStyle(color: Theme.of(context).colorScheme.primary),
             ),
           ),
         ],
@@ -284,21 +284,21 @@ class CardDetailPage extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surfaceMedium,
-        title: const Text(
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+        title: Text(
           '删除音乐卡片',
-          style: TextStyle(color: AppTheme.textPrimary),
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
         ),
-        content: const Text(
+        content: Text(
           '确定要删除这张音乐卡片吗？此操作不可撤销。',
-          style: TextStyle(color: AppTheme.textSecondary),
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text(
+            child: Text(
               '取消',
-              style: TextStyle(color: AppTheme.textSecondary),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ),
           TextButton(
@@ -307,9 +307,9 @@ class CardDetailPage extends ConsumerWidget {
               if (ctx.mounted) Navigator.of(ctx).pop();
               if (context.mounted) Navigator.of(context).pop();
             },
-            child: const Text(
+            child: Text(
               '删除',
-              style: TextStyle(color: AppTheme.accent),
+              style: TextStyle(color: Theme.of(context).colorScheme.primary),
             ),
           ),
         ],
@@ -340,20 +340,20 @@ class CardDetailPage extends ConsumerWidget {
                 width: 40,
                 height: 5,
                 decoration: BoxDecoration(
-                  color: AppTheme.textSecondary.withValues(alpha: 0.4),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(3),
                 ),
               ),
               const SizedBox(height: 16),
               // ── Title ────────────────────────────────────────────
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Row(
                   children: [
                     Text(
                       '📖 完整日记',
                       style: TextStyle(
-                        color: AppTheme.textPrimary,
+                        color: Theme.of(context).colorScheme.onSurface,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
@@ -369,8 +369,8 @@ class CardDetailPage extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Text(
                     card.fullContent,
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontSize: 15,
                       height: 1.8,
                     ),

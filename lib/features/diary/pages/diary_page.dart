@@ -1,7 +1,6 @@
 // lib/features/diary/pages/diary_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/theme.dart';
 import '../providers/diary_list_provider.dart';
 import '../widgets/timeline_list.dart';
 
@@ -17,11 +16,11 @@ class DiaryPage extends ConsumerWidget {
     final cardsAsync = ref.watch(diaryListProvider);
 
     return Scaffold(
-      backgroundColor: AppTheme.surfaceDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: cardsAsync.when(
-          loading: () => const Center(
-            child: CircularProgressIndicator(color: AppTheme.accent),
+          loading: () => Center(
+            child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
           ),
           error: (error, _) => Center(
             child: Column(
@@ -29,15 +28,15 @@ class DiaryPage extends ConsumerWidget {
               children: [
                 Text(
                   '加载失败: $error',
-                  style: const TextStyle(color: AppTheme.textSecondary),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 12),
                 TextButton(
                   onPressed: () =>
                       ref.read(diaryListProvider.notifier).loadCards(),
-                  child: const Text(
+                  child: Text(
                     '重试',
-                    style: TextStyle(color: AppTheme.accent),
+                    style: TextStyle(color: Theme.of(context).colorScheme.primary),
                   ),
                 ),
               ],

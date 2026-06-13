@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
-import '../../../core/theme.dart';
 import '../../diary/providers/diary_list_provider.dart';
 
 /// Profile page showing user avatar, stats, and settings/about links.
@@ -18,7 +17,7 @@ class ProfilePage extends ConsumerWidget {
     final totalCount = cardsAsync.whenOrNull(data: (cards) => cards.length) ?? 0;
 
     return Scaffold(
-      backgroundColor: AppTheme.surfaceDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
@@ -28,10 +27,10 @@ class ProfilePage extends ConsumerWidget {
               _buildAvatar(),
               const SizedBox(height: 16),
               // ── Name ───────────────────────────────────────────────
-              const Text(
+              Text(
                 'Finjix 的音乐日记',
                 style: TextStyle(
-                  color: AppTheme.textPrimary,
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                 ),
@@ -86,21 +85,21 @@ class ProfilePage extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surfaceMedium,
-        title: const Text(
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+        title: Text(
           '关于 Meloday',
-          style: TextStyle(color: AppTheme.textPrimary),
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
         ),
-        content: const Text(
+        content: Text(
           'Meloday · 音乐日记\n\n用音乐记录每一天的心情。',
-          style: TextStyle(color: AppTheme.textSecondary),
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text(
+            child: Text(
               '好的',
-              style: TextStyle(color: AppTheme.accent),
+              style: TextStyle(color: Theme.of(context).colorScheme.primary),
             ),
           ),
         ],
@@ -129,8 +128,8 @@ class _StatCard extends StatelessWidget {
           children: [
             Text(
               value,
-              style: const TextStyle(
-                color: AppTheme.accent,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
               ),
@@ -138,8 +137,8 @@ class _StatCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               label,
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: 13,
               ),
             ),
@@ -166,13 +165,13 @@ class _Tile extends StatelessWidget {
       shape: const LiquidRoundedSuperellipse(borderRadius: 14),
       settings: const LiquidGlassSettings(blur: 6),
       child: ListTile(
-        leading: Icon(icon, color: AppTheme.textPrimary),
+        leading: Icon(icon, color: Theme.of(context).colorScheme.onSurface),
         title: Text(
           label,
-          style: const TextStyle(color: AppTheme.textPrimary),
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
         ),
         trailing:
-            const Icon(Icons.chevron_right_rounded, color: AppTheme.textSecondary),
+            Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
         onTap: onTap,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),

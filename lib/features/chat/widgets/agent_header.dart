@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import '../../../models/chat_message.dart';
-import '../../../core/theme.dart';
 
 class AgentHeader extends StatelessWidget {
   final ChatMessage? message;
@@ -41,8 +40,8 @@ class AgentHeader extends StatelessWidget {
                       padding: const EdgeInsets.all(14),
                       child: Text(
                         message!.content,
-                        style: const TextStyle(
-                          color: AppTheme.textPrimary,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
                           fontSize: 15,
                           height: 1.5,
                         ),

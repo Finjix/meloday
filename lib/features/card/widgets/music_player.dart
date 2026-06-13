@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
-import '../../../core/theme.dart';
 
 /// A glass morphism styled music player widget using audioplayers.
 ///
@@ -119,12 +118,12 @@ class _MusicPlayerState extends State<MusicPlayer> {
         children: [
           // ── Progress slider ─────────────────────────────────────────
           if (_hasError)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
               child: Text(
                 '音频加载失败',
                 style: TextStyle(
-                  color: AppTheme.textSecondary,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   fontSize: 12,
                 ),
               ),
@@ -134,8 +133,8 @@ class _MusicPlayerState extends State<MusicPlayer> {
               children: [
                 Text(
                   _formatDuration(_position),
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontSize: 11,
                     fontFeatures: [FontFeature.tabularFigures()],
                   ),
@@ -144,17 +143,17 @@ class _MusicPlayerState extends State<MusicPlayer> {
                   child: GlassSlider(
                     value: _sliderValue,
                     onChanged: _onSliderChanged,
-                    activeColor: AppTheme.accent,
+                    activeColor: Theme.of(context).colorScheme.primary,
                     inactiveColor: Colors.white.withValues(alpha: 0.15),
-                    thumbColor: AppTheme.accent,
+                    thumbColor: Theme.of(context).colorScheme.primary,
                     trackHeight: 4,
                     thumbRadius: 12,
                   ),
                 ),
                 Text(
                   _formatDuration(_duration),
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontSize: 11,
                     fontFeatures: [FontFeature.tabularFigures()],
                   ),
@@ -172,12 +171,12 @@ class _MusicPlayerState extends State<MusicPlayer> {
             ),
             settings: const LiquidGlassSettings(blur: 12),
             useOwnLayer: true,
-            glowColor: AppTheme.accent.withValues(alpha: 0.3),
+            glowColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
             glowRadius: 1.2,
             interactionScale: 1.08,
             child: Icon(
               isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-              color: AppTheme.accent,
+              color: Theme.of(context).colorScheme.primary,
               size: 32,
             ),
           ),

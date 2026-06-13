@@ -1,7 +1,6 @@
 // lib/features/chat/widgets/chat_input.dart
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
-import '../../../core/theme.dart';
 
 class ChatInput extends StatefulWidget {
   final bool enabled;
@@ -47,12 +46,12 @@ class _ChatInputState extends State<ChatInput> {
               child: TextField(
                 controller: _controller,
                 enabled: widget.enabled,
-                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
-                decoration: const InputDecoration(
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 14),
+                decoration: InputDecoration(
                   hintText: '💬 分享今天的点滴...',
-                  hintStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+                  hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14),
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 ),
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _handleSend(),
@@ -62,8 +61,8 @@ class _ChatInputState extends State<ChatInput> {
               icon: Icon(
                 Icons.send_rounded,
                 color: widget.enabled
-                    ? AppTheme.accent
-                    : AppTheme.textSecondary,
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
               onPressed: widget.enabled ? _handleSend : null,
             ),

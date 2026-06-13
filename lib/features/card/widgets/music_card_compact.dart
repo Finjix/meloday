@@ -44,8 +44,8 @@ class MusicCardCompact extends StatelessWidget {
             Expanded(
               child: Text(
                 card.name,
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
                 ),
@@ -57,7 +57,7 @@ class MusicCardCompact extends StatelessWidget {
             // ── Chevron ───────────────────────────────────────────────
             Icon(
               Icons.chevron_right_rounded,
-              color: AppTheme.textSecondary.withValues(alpha: 0.6),
+              color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
               size: 22,
             ),
           ],

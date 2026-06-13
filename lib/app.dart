@@ -1,7 +1,6 @@
 // lib/app.dart
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
-import 'core/theme.dart';
 import 'features/chat/pages/home_page.dart';
 import 'features/diary/pages/diary_page.dart';
 import 'features/profile/pages/profile_page.dart';
@@ -29,7 +28,7 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.surfaceDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: IndexedStack(
         index: _currentIndex,
         children: _pages,
@@ -97,13 +96,15 @@ class _NavItem extends StatelessWidget {
         height: 44,
         decoration: BoxDecoration(
           color: isSelected
-              ? AppTheme.accent.withValues(alpha: 0.2)
+              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Icon(
           icon,
-          color: isSelected ? AppTheme.accent : AppTheme.textSecondary,
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.onSurfaceVariant,
           size: 24,
         ),
       ),

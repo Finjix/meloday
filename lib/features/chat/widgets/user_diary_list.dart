@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import '../../../models/chat_message.dart';
-import '../../../core/theme.dart';
 
 class UserDiaryList extends StatelessWidget {
   final List<ChatMessage> messages;
@@ -18,11 +17,11 @@ class UserDiaryList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (messages.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           '写下今天的故事... ✍️',
           style: TextStyle(
-            color: AppTheme.textSecondary,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
             fontSize: 14,
           ),
         ),
@@ -45,8 +44,8 @@ class UserDiaryList extends StatelessWidget {
               children: [
                 Text(
                   timeStr,
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontSize: 11,
                   ),
                 ),
@@ -60,8 +59,8 @@ class UserDiaryList extends StatelessWidget {
                   ),
                   child: Text(
                     msg.content,
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontSize: 14,
                       height: 1.5,
                     ),

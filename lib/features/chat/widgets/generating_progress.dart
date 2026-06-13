@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import '../../../models/generating_progress.dart';
-import '../../../core/theme.dart';
 
 class GeneratingProgressWidget extends StatelessWidget {
   final GeneratingProgress progress;
@@ -25,16 +24,16 @@ class GeneratingProgressWidget extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 '正在为你创作...',
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontSize: 14,
                 ),
               ),
               const Spacer(),
               Text(
                 '${progress.currentStep}/${progress.totalSteps}',
-                style: const TextStyle(
-                  color: AppTheme.textSecondary,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   fontSize: 12,
                 ),
               ),
@@ -43,8 +42,8 @@ class GeneratingProgressWidget extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             progress.stepName,
-            style: const TextStyle(
-              color: AppTheme.accent,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
               fontSize: 13,
             ),
           ),
@@ -54,7 +53,7 @@ class GeneratingProgressWidget extends StatelessWidget {
             child: LinearProgressIndicator(
               value: progress.percent,
               backgroundColor: Colors.white.withValues(alpha: 0.1),
-              valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.accent),
+              valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.primary),
               minHeight: 4,
             ),
           ),

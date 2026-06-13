@@ -31,7 +31,9 @@ class MainApp extends StatelessWidget {
     return MaterialApp(
       title: 'Meloday',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.light,
       home: const AppShell(),
       onGenerateRoute: (settings) {
         if (settings.name == '/card') {

@@ -51,7 +51,7 @@ class _EmptyState extends StatelessWidget {
           Text(
             '还没有日记',
             style: TextStyle(
-              color: AppTheme.textPrimary.withValues(alpha: 0.8),
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
               fontSize: 17,
               fontWeight: FontWeight.w500,
             ),
@@ -60,7 +60,7 @@ class _EmptyState extends StatelessWidget {
           Text(
             '去首页写一篇吧 ✨',
             style: TextStyle(
-              color: AppTheme.textSecondary.withValues(alpha: 0.7),
+              color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
               fontSize: 13,
             ),
           ),
@@ -187,8 +187,8 @@ class _TimelineRow extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Text(
                     dateLabel,
-                    style: const TextStyle(
-                      color: AppTheme.textSecondary,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
