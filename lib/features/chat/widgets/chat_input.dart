@@ -1,10 +1,7 @@
 // lib/features/chat/widgets/chat_input.dart
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import '../../../core/glass_config.dart';
-import '../../../models/conversation_state.dart';
-import '../../chat/providers/conversation_provider.dart';
 
 // ── ChatFab ────────────────────────────────────────────────────────────
 /// 60 px glass circle. Icon depends on state:
@@ -65,50 +62,27 @@ class ChatFab extends StatelessWidget {
 /// Text input that replaces the nav bar when expanded.
 ///
 /// Does NOT include a send button — the [ChatFab] handles that.
-class InputPanel extends ConsumerStatefulWidget {
+class InputPanel extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onSend;
-  final VoidCallback onChanged;
+  final bool enabled;
 
   const InputPanel({
     super.key,
     required this.controller,
     required this.onSend,
-    required this.onChanged,
+    required this.enabled,
   });
 
   @override
-  ConsumerState<InputPanel> createState() => _InputPanelState();
-}
-
-class _InputPanelState extends ConsumerState<InputPanel> {
-  final _focusNode = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
-  void dispose() {
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final isGenerating =
-        ref.watch(conversationProvider).status == ConvStatus.generating;
-
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 16),
       settings: GlassConfig.navBar,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: TextField(
-        controller: widget.controller,
-        focusNode: _focusNode,
-        enabled: !isGenerating,
-        autofocus: false,
+        controller: controller,
+        enabled: enabled,
         maxLines: 8,
         minLines: 8,
         style: TextStyle(
@@ -126,8 +100,7 @@ class _InputPanelState extends ConsumerState<InputPanel> {
           contentPadding: EdgeInsets.zero,
         ),
         textInputAction: TextInputAction.newline,
-        onChanged: (_) => widget.onChanged(),
-        onSubmitted: (_) => widget.onSend(),
+        onSubmitted: (_) => onSend(),
       ),
     );
   }

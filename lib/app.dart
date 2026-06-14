@@ -6,6 +6,7 @@ import 'core/glass_config.dart';
 import 'features/chat/pages/home_page.dart';
 import 'features/chat/providers/conversation_provider.dart';
 import 'features/chat/widgets/chat_input.dart';
+import 'models/conversation_state.dart';
 import 'features/diary/pages/diary_page.dart';
 import 'features/profile/pages/profile_page.dart';
 
@@ -23,6 +24,7 @@ class _AppShellState extends ConsumerState<AppShell>
   bool _isInputExpanded = false;
 
   final _textController = TextEditingController();
+  final _hasTextNotifier = ValueNotifier(false);
 
   late final AnimationController _slideController;
   late final Animation<Offset> _barSlide;
@@ -82,11 +84,22 @@ class _AppShellState extends ConsumerState<AppShell>
       duration: const Duration(milliseconds: 350),
     );
     _tabAnim.addListener(() => setState(() {}));
+
+    _textController.addListener(_onTextChanged);
+    _onSendStable = _sendMessage;
+  }
+
+  late final VoidCallback _onSendStable;
+
+  void _onTextChanged() {
+    _hasTextNotifier.value = _textController.text.trim().isNotEmpty;
   }
 
   @override
   void dispose() {
+    _textController.removeListener(_onTextChanged);
     _textController.dispose();
+    _hasTextNotifier.dispose();
     _slideController.dispose();
     _tabAnim.dispose();
     super.dispose();
@@ -216,8 +229,9 @@ class _AppShellState extends ConsumerState<AppShell>
                     position: _inputSlide,
                     child: InputPanel(
                       controller: _textController,
-                      onSend: _sendMessage,
-                      onChanged: () => setState(() {}),
+                      onSend: _onSendStable,
+                      enabled: ref.watch(conversationProvider).status !=
+                          ConvStatus.generating,
                     ),
                   ),
                 ),
@@ -235,10 +249,13 @@ class _AppShellState extends ConsumerState<AppShell>
                   child: Padding(
                     padding:
                         const EdgeInsets.symmetric(vertical: _pillOuterPadV),
-                    child: ChatFab(
-                      isExpanded: _isInputExpanded,
-                      hasText: _textController.text.trim().isNotEmpty,
-                      onTap: _handleFabTap,
+                    child: ValueListenableBuilder(
+                      valueListenable: _hasTextNotifier,
+                      builder: (_, hasText, _) => ChatFab(
+                        isExpanded: _isInputExpanded,
+                        hasText: hasText,
+                        onTap: _handleFabTap,
+                      ),
                     ),
                   ),
                 ),
