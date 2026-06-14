@@ -99,7 +99,7 @@ class InputPanel extends StatelessWidget {
           border: InputBorder.none,
           contentPadding: EdgeInsets.zero,
         ),
-        textInputAction: TextInputAction.newline,
+        textInputAction: TextInputAction.send,
         onSubmitted: (_) => onSend(),
       ),
     );
