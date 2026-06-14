@@ -57,21 +57,21 @@ class _AppShellState extends ConsumerState<AppShell>
     super.initState();
     _slideController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1100),
+      duration: const Duration(milliseconds: 1000),
     );
     _barSlide = Tween<Offset>(
       begin: Offset.zero,
       end: const Offset(0, 1.5),
     ).animate(CurvedAnimation(
       parent: _slideController,
-      curve: const Interval(0.0, 0.545, curve: Curves.easeInOut),
+      curve: const Interval(0.0, 0.5, curve: Curves.easeInOut),
     ));
     _inputSlide = Tween<Offset>(
-      begin: const Offset(0, 1.0),
+      begin: const Offset(0, 1.3),
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _slideController,
-      curve: const Interval(0.545, 1.0, curve: Curves.easeInOut),
+      curve: const Interval(0.5, 1.0, curve: Curves.easeInOut),
     ));
     _slideController.addStatusListener((status) {
       if (status == AnimationStatus.dismissed) setState(() {});
@@ -166,9 +166,14 @@ class _AppShellState extends ConsumerState<AppShell>
             child: GestureDetector(
               onTap: _isInputExpanded ? _toggleInput : null,
               behavior: HitTestBehavior.opaque,
-              child: IndexedStack(
-                index: _currentIndex,
-                children: _pages,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 280),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                child: KeyedSubtree(
+                  key: ValueKey(_currentIndex),
+                  child: _pages[_currentIndex],
+                ),
               ),
             ),
           ),
