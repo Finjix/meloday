@@ -85,6 +85,9 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
   }
 
   Future<void> sendMessage(String content) async {
+    // Guard against re-entrancy during generation
+    if (state.status == ConvStatus.generating) return;
+
     final userMsg = ChatMessage(
       id: _uuid.v4(),
       content: content,

@@ -31,7 +31,6 @@ abstract final class GlassConfig {
   static const LiquidGlassSettings surface = light;
   static const LiquidGlassSettings card = light;
   static const LiquidGlassSettings sheet = light;
-  static const LiquidGlassSettings input = light;
   static const LiquidGlassSettings interactive = light;
   static const LiquidGlassSettings tag = light;
 

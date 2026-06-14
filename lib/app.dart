@@ -76,14 +76,16 @@ class _AppShellState extends ConsumerState<AppShell>
       curve: const Interval(0.375, 1.0, curve: Curves.easeInOut),
     ));
     _slideController.addStatusListener((status) {
-      if (status == AnimationStatus.dismissed) setState(() {});
+      if (status == AnimationStatus.dismissed ||
+          status == AnimationStatus.completed) {
+        setState(() {});
+      }
     });
 
     _tabAnim = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
-    _tabAnim.addListener(() => setState(() {}));
 
     _textController.addListener(_onTextChanged);
     _onSendStable = _sendMessage;
@@ -129,6 +131,8 @@ class _AppShellState extends ConsumerState<AppShell>
   void _sendMessage() {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
+    final status = ref.read(conversationProvider).status;
+    if (status == ConvStatus.generating) return;
     ref.read(conversationProvider.notifier).sendMessage(text);
     _textController.clear();
     _toggleInput();
@@ -153,24 +157,21 @@ class _AppShellState extends ConsumerState<AppShell>
 
   @override
   Widget build(BuildContext context) {
-    final showFab = _currentIndex == 0 || _tabAnim.isAnimating;
     final showInput =
         _currentIndex == 0 && (_isInputExpanded || _slideController.isAnimating);
     final showBar =
         !_isInputExpanded || !_slideController.isCompleted;
     final rowHeight = _bottomRowHeight(context);
 
-    // ── Tab transition interpolation ─────────────────────────────
-    final t = _tabAnim.value; // 0 = home, 1 = other tab
-    final barRight = _fabPadR + _fabArea * (1 - t);   // 118 → 20
-    final fabRight = _fabPadR - _fabArea * t;          // 20 → -78
-    final fabOpacity = (1 - t).clamp(0.0, 1.0);
-
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(
         children: [
           // ── Page content ──────────────────────────────────────────
+          // Note: AnimatedSwitcher destroys the old page on tab
+          // switch, resetting local widget state (scroll position
+          // etc.). Conversation state lives in Riverpod and survives.
+          // TODO: preserve scroll position in a provider if needed.
           Positioned(
             top: 0,
             left: 0,
@@ -205,7 +206,8 @@ class _AppShellState extends ConsumerState<AppShell>
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0),
+                        Theme.of(context).scaffoldBackgroundColor
+                            .withValues(alpha: 0),
                         Theme.of(context).scaffoldBackgroundColor,
                         Theme.of(context).scaffoldBackgroundColor,
                       ],
@@ -216,76 +218,94 @@ class _AppShellState extends ConsumerState<AppShell>
               ),
             ),
 
-          // ── Bar ───────────────────────────────────────────────────
-          if (showBar)
-            Positioned(
-              left: 0,
-              right: barRight,
-              bottom: 0,
-              child: SafeArea(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    left: _fabPadR,
-                    top: _pillOuterPadV,
-                    bottom: _pillOuterPadV,
-                  ),
-                  child: SlideTransition(
-                    position: _barSlide,
-                    child: _buildNavPill(),
-                  ),
-                ),
-              ),
-            ),
+          // ── Animated bottom row — only this subtree rebuilds on ──
+          // ── tabAnim ticks, not the entire AppShell.              ──
+          AnimatedBuilder(
+            animation: _tabAnim,
+            builder: (context, _) {
+              final t = _tabAnim.value;
+              final showFab = _currentIndex == 0 || _tabAnim.isAnimating;
+              final barRight = _fabPadR + _fabArea * (1 - t);
+              final fabRight = _fabPadR - _fabArea * t;
+              final fabOpacity = (1 - t).clamp(0.0, 1.0);
 
-          // ── Input ─────────────────────────────────────────────────
-          if (showInput)
-            Positioned(
-              left: 0,
-              right: barRight,
-              bottom: 0,
-              child: SafeArea(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    left: _fabPadR,
-                    top: _pillOuterPadV,
-                    bottom: _pillOuterPadV,
-                  ),
-                  child: SlideTransition(
-                    position: _inputSlide,
-                    child: InputPanel(
-                      controller: _textController,
-                      onSend: _onSendStable,
-                      enabled: ref.watch(conversationProvider).status !=
-                          ConvStatus.generating,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-          // ── FAB — slides off-screen when switching tabs ──────────
-          if (showFab)
-            Positioned(
-              right: fabRight,
-              bottom: 0,
-              child: Opacity(
-                opacity: fabOpacity,
-                child: SafeArea(
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: _pillOuterPadV),
-                    child: ValueListenableBuilder(
-                      valueListenable: _hasTextNotifier,
-                      builder: (_, hasText, _) => ChatFab(
-                        isExpanded: _isInputExpanded,
-                        hasText: hasText,
-                        onTap: _handleFabTap,
+              return Stack(
+                children: [
+                  // ── Bar ─────────────────────────────────────────
+                  if (showBar)
+                    Positioned(
+                      left: 0,
+                      right: barRight,
+                      bottom: 0,
+                      child: SafeArea(
+                        child: Padding(
+                          padding: EdgeInsets.only(
+                            left: _fabPadR,
+                            top: _pillOuterPadV,
+                            bottom: _pillOuterPadV,
+                          ),
+                          child: SlideTransition(
+                            position: _barSlide,
+                            child: _buildNavPill(),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              ),
-            ),
+
+                  // ── Input ───────────────────────────────────────
+                  if (showInput)
+                    Positioned(
+                      left: 0,
+                      right: barRight,
+                      bottom: 0,
+                      child: SafeArea(
+                        child: Padding(
+                          padding: EdgeInsets.only(
+                            left: _fabPadR,
+                            top: _pillOuterPadV,
+                            bottom: _pillOuterPadV,
+                          ),
+                          child: SlideTransition(
+                            position: _inputSlide,
+                            child: InputPanel(
+                              controller: _textController,
+                              onSend: _onSendStable,
+                              enabled: ref.watch(conversationProvider)
+                                      .status !=
+                                  ConvStatus.generating,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // ── FAB — slides off-screen on tab switch ──────
+                  if (showFab)
+                    Positioned(
+                      right: fabRight,
+                      bottom: 0,
+                      child: Opacity(
+                        opacity: fabOpacity,
+                        child: SafeArea(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: _pillOuterPadV),
+                            child: ValueListenableBuilder(
+                              valueListenable: _hasTextNotifier,
+                              builder: (_, hasText, _) => ChatFab(
+                                isExpanded: _isInputExpanded,
+                                hasText: hasText,
+                                onTap: _handleFabTap,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
         ],
       ),
     );

@@ -147,9 +147,12 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
 
     final showDivider = state.userMessages.isNotEmpty;
+    final bgColor = Theme.of(context).scaffoldBackgroundColor;
+
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: bgColor,
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             _buildAgentArea(state),
@@ -158,8 +161,9 @@ class _HomePageState extends ConsumerState<HomePage> {
               Expanded(
                 child: ShaderMask(
                   shaderCallback: (bounds) {
-                    final bgColor = Theme.of(context).scaffoldBackgroundColor;
-                    final topFade = 20.0 / bounds.height;
+                    final t = bounds.height > 0
+                        ? (20.0 / bounds.height).clamp(0.0, 0.2)
+                        : 0.02;
                     return LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
@@ -169,7 +173,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         bgColor.withValues(alpha: 0),
                         bgColor.withValues(alpha: 0),
                       ],
-                      stops: [0.0, topFade * 0.2, topFade, 1.0],
+                      stops: [0.0, t * 0.2, t, 1.0],
                     ).createShader(bounds);
                   },
                   blendMode: BlendMode.srcOver,
@@ -196,19 +200,16 @@ class _HomePageState extends ConsumerState<HomePage> {
                           }
                           final msg = state.userMessages[index - 1];
                           return Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 32),
-                              child: Text(
-                                msg.content,
-                                style: TextStyle(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurface,
-                                  fontSize: 17,
-                                  height: 1.8,
-                                ),
+                            padding: const EdgeInsets.only(
+                                bottom: 16, left: 32, right: 32),
+                            child: Text(
+                              msg.content,
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface,
+                                fontSize: 17,
+                                height: 1.8,
                               ),
                             ),
                           );
@@ -270,4 +271,3 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 }
-
