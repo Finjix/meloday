@@ -14,16 +14,16 @@ class AgentHeader extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Agent avatar — pill shape on the left
+          // Agent avatar — matches bubble height
           GlassContainer(
-            width: 55,
-            height: 55,
+            width: 52,
+            height: 52,
             shape: const LiquidRoundedSuperellipse(borderRadius: 999),
             settings: GlassConfig.interactive,
             child: const Center(
-              child: Text('😊', style: TextStyle(fontSize: 24)),
+              child: Text('😊', style: TextStyle(fontSize: 22)),
             ),
           ),
           const SizedBox(width: 12),
