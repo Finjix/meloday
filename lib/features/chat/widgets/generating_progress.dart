@@ -11,10 +11,9 @@ class GeneratingProgressWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 16),
-      settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
+      settings: GlassConfig.card,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

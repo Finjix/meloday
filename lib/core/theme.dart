@@ -4,19 +4,11 @@ class AppTheme {
   static const String defaultAccentHex = '#E88DAA';
   static const Color defaultAccent = Color(0xFFE88DAA);
 
-  // Light theme palette — scaffold background is now derived from accent
   static const Color surfaceLightMedium = Color(0xFFEDE4F0);
 
-  // Dark theme palette (legacy)
-  static const Color surfaceDark = Color(0xFF1A1A2E);
-  static const Color surfaceMedium = Color(0xFF16213E);
-  static const Color surfaceLight = Color(0xFF0F3460);
-
-  /// Legacy const accent (for fallback / backward compat).
   static const Color accent = Color(0xFFE88DAA);
 
-  /// Derive a very light tint (≈15% accent + 85% white) for the scaffold
-  /// background so it subtly echoes the current theme colour.
+  /// Derive a very light tint for the scaffold background.
   static Color scaffoldBgFromAccent(Color accent) {
     return Color.lerp(accent, Colors.white, 0.85)!;
   }
@@ -27,8 +19,7 @@ class AppTheme {
     return Color(color | 0xFF000000);
   }
 
-  /// Returns a two-color gradient pair derived from [color] for use in
-  /// cover images and thumbnails. First color is lighter, second is darker.
+  /// Returns a two-color gradient pair derived from [color].
   static List<Color> gradientPairFromMood(Color color) {
     final hsl = HSLColor.fromColor(color);
     return [
@@ -37,8 +28,7 @@ class AppTheme {
     ];
   }
 
-  /// Build a light [ThemeData] whose primary colour and scaffold background
-  /// are derived from [accentHex] (a hex string like `'#E88DAA'`).
+  /// Build a light [ThemeData] from [accentHex].
   static ThemeData lightThemeFromHex(String accentHex) {
     return lightThemeFromColor(moodColorFromHex(accentHex));
   }
@@ -53,23 +43,6 @@ class AppTheme {
         surface: surfaceLightMedium,
         onSurface: const Color(0xFF3C3C3C),
         onSurfaceVariant: const Color(0xFF6B6B6B),
-      ),
-      fontFamily: 'Roboto',
-    );
-  }
-
-  static ThemeData darkThemeFromHex(String accentHex) {
-    return darkThemeFromColor(moodColorFromHex(accentHex));
-  }
-
-  static ThemeData darkThemeFromColor(Color accentColor) {
-    return ThemeData(
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: Colors.black,
-      colorScheme: ColorScheme.dark(
-        primary: accentColor,
-        secondary: surfaceLight,
-        surface: surfaceMedium,
       ),
       fontFamily: 'Roboto',
     );

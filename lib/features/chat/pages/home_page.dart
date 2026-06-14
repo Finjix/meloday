@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/conversation_state.dart';
 import '../providers/conversation_provider.dart';
 import '../widgets/agent_header.dart';
-import '../widgets/chat_input.dart';
+
 import '../widgets/generating_progress.dart';
 import '../widgets/user_diary_list.dart';
 import '../../card/widgets/music_card_compact.dart';
@@ -48,9 +48,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 
-  void _handleSend(String text) {
-    ref.read(conversationProvider.notifier).sendMessage(text);
-  }
 
   void _handleRetry() {
     ref.read(conversationProvider.notifier).retryFromError();
@@ -154,8 +151,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
 
     final showDivider = state.userMessages.isNotEmpty;
-    final isDisabled = state.status == ConvStatus.generating;
-
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
@@ -182,14 +177,8 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
             ),
 
-            // ── Bottom: Chat input ───────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
-              child: ChatInput(
-                enabled: !isDisabled,
-                onSend: _handleSend,
-              ),
-            ),
+            // ── Bottom inset is handled by AppShell ────────────────────
+            const SizedBox(height: 1),
           ],
         ),
       ),

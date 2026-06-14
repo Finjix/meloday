@@ -11,7 +11,6 @@ class AgentHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Row(
@@ -22,7 +21,7 @@ class AgentHeader extends StatelessWidget {
             width: 55,
             height: 55,
             shape: const LiquidRoundedSuperellipse(borderRadius: 999),
-            settings: isDark ? GlassConfig.darkInteractive : GlassConfig.interactive,
+            settings: GlassConfig.interactive,
             child: const Center(
               child: Text('😊', style: TextStyle(fontSize: 24)),
             ),
@@ -40,7 +39,7 @@ class AgentHeader extends StatelessWidget {
                     ? GlassContainer(
                         key: ValueKey(message!.id),
                         shape: const LiquidRoundedSuperellipse(borderRadius: 16),
-                        settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
+                        settings: GlassConfig.card,
                         padding: const EdgeInsets.all(14),
                         child: Text(
                           message!.content,

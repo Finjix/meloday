@@ -81,7 +81,6 @@ class CardDetailPage extends ConsumerWidget {
   }
 
   Scaffold _buildContent(BuildContext context, WidgetRef ref, MusicCard card) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final moodColor = AppTheme.moodColorFromHex(card.moodColor);
     final dateFormatted =
         DateFormat('yyyy年M月d日 HH:mm', 'zh_CN').format(card.createdAt);
@@ -130,7 +129,7 @@ class CardDetailPage extends ConsumerWidget {
             GlassContainer(
               shape:
                   const LiquidRoundedSuperellipse(borderRadius: 16),
-              settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
+              settings: GlassConfig.card,
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: () => _showFullDiarySheet(context, card),
@@ -175,12 +174,11 @@ class CardDetailPage extends ConsumerWidget {
 
   // ── Cover area ──────────────────────────────────────────────────────
   Widget _buildCoverArea(BuildContext context, Color moodColor) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final gradientColors = AppTheme.gradientPairFromMood(moodColor);
 
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 16),
-      settings: isDark ? GlassConfig.darkSurface : GlassConfig.surface,
+      settings: GlassConfig.surface,
       child: Container(
         height: 160,
         decoration: BoxDecoration(
@@ -203,10 +201,9 @@ class CardDetailPage extends ConsumerWidget {
 
   // ── Tag chip ────────────────────────────────────────────────────────
   Widget _buildTag(BuildContext context, String label, Color moodColor) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 16),
-      settings: isDark ? GlassConfig.darkTag : GlassConfig.tag,
+      settings: GlassConfig.tag,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Text(
         '#$label',
@@ -333,10 +330,9 @@ class CardDetailPage extends ConsumerWidget {
         maxChildSize: 0.95,
         expand: false,
         builder: (ctx, scrollController) {
-          final isDark = Theme.of(context).brightness == Brightness.dark;
           return GlassContainer(
             shape: const LiquidRoundedSuperellipse(borderRadius: 16),
-            settings: isDark ? GlassConfig.darkSheet : GlassConfig.sheet,
+            settings: GlassConfig.sheet,
             margin: const EdgeInsets.all(8),
             child: Column(
               children: [

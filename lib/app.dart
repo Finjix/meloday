@@ -1,25 +1,34 @@
 // lib/app.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'core/glass_config.dart';
 import 'features/chat/pages/home_page.dart';
+import 'features/chat/providers/conversation_provider.dart';
+import 'features/chat/widgets/chat_input.dart';
 import 'features/diary/pages/diary_page.dart';
 import 'features/profile/pages/profile_page.dart';
 
 /// Root app shell with a glass bottom navigation bar.
-///
-/// Uses [IndexedStack] for instant page switching and an
-/// [AnimatedPositioned] pill highlight with [Curves.easeOutCubic] easing for
-/// smooth tab transitions.
-class AppShell extends StatefulWidget {
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
 
   @override
-  State<AppShell> createState() => _AppShellState();
+  ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends ConsumerState<AppShell>
+    with TickerProviderStateMixin {
   int _currentIndex = 0;
+  bool _isInputExpanded = false;
+
+  final _textController = TextEditingController();
+
+  late final AnimationController _slideController;
+  late final Animation<Offset> _barSlide;
+  late final Animation<Offset> _inputSlide;
+
+  late final AnimationController _tabAnim;
 
   static const _pages = <Widget>[
     HomePage(),
@@ -33,85 +42,264 @@ class _AppShellState extends State<AppShell> {
     Icons.person_rounded,
   ];
 
+  static const double _pillWidth = 44;
+  static const double _pillInnerPadV = 10;
+  static const double _pillOuterPadV = 12;
+  static const double _fabSize = 66;
+  static const double _fabGap = 12;
+  static const double _fabPadR = 20;
+
+  /// Total horizontal space the FAB area occupies when visible.
+  static const double _fabArea = _fabGap + _fabSize + _fabPadR; // 98
+
+  @override
+  void initState() {
+    super.initState();
+    _slideController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
+    _barSlide = Tween<Offset>(
+      begin: Offset.zero,
+      end: const Offset(0, 1.5),
+    ).animate(CurvedAnimation(
+      parent: _slideController,
+      curve: const Interval(0.0, 0.545, curve: Curves.easeInOut),
+    ));
+    _inputSlide = Tween<Offset>(
+      begin: const Offset(0, 1.0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _slideController,
+      curve: const Interval(0.545, 1.0, curve: Curves.easeInOut),
+    ));
+    _slideController.addStatusListener((status) {
+      if (status == AnimationStatus.dismissed) setState(() {});
+    });
+
+    _tabAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+    _tabAnim.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _slideController.dispose();
+    _tabAnim.dispose();
+    super.dispose();
+  }
+
+  void _toggleInput() {
+    setState(() {
+      _isInputExpanded = !_isInputExpanded;
+      if (_isInputExpanded) {
+        _slideController.forward();
+      } else {
+        _slideController.reverse();
+      }
+    });
+  }
+
+  void _handleFabTap() {
+    if (!_isInputExpanded) {
+      _toggleInput();
+    } else if (_textController.text.trim().isNotEmpty) {
+      _sendMessage();
+    } else {
+      _toggleInput();
+    }
+  }
+
+  void _sendMessage() {
+    final text = _textController.text.trim();
+    if (text.isEmpty) return;
+    ref.read(conversationProvider.notifier).sendMessage(text);
+    _textController.clear();
+    _toggleInput();
+  }
+
+  void _switchTab(int index) {
+    if (index == _currentIndex) return;
+    if (_isInputExpanded) _toggleInput();
+
+    if (index == 0) {
+      _tabAnim.reverse(); // show FAB
+    } else if (_currentIndex == 0) {
+      _tabAnim.forward(); // hide FAB
+    }
+    setState(() => _currentIndex = index);
+  }
+
+  double _bottomRowHeight(BuildContext context) {
+    final safeBottom = MediaQuery.of(context).padding.bottom;
+    return safeBottom + _pillOuterPadV * 2 + _pillInnerPadV * 2 + _pillWidth;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final showFab = _currentIndex == 0 || _tabAnim.isAnimating;
+    final showInput =
+        _currentIndex == 0 && (_isInputExpanded || _slideController.isAnimating);
+    final showBar =
+        !_isInputExpanded || !_slideController.isCompleted;
+    final rowHeight = _bottomRowHeight(context);
+
+    // ── Tab transition interpolation ─────────────────────────────
+    final t = _tabAnim.value; // 0 = home, 1 = other tab
+    final barRight = _fabPadR + _fabArea * (1 - t);   // 118 → 20
+    final fabRight = _fabPadR - _fabArea * t;          // 20 → -78
+    final fabOpacity = (1 - t).clamp(0.0, 1.0);
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
+      body: Stack(
+        children: [
+          // ── Page content ──────────────────────────────────────────
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: _isInputExpanded ? 0 : rowHeight,
+            child: GestureDetector(
+              onTap: _isInputExpanded ? _toggleInput : null,
+              behavior: HitTestBehavior.opaque,
+              child: IndexedStack(
+                index: _currentIndex,
+                children: _pages,
+              ),
+            ),
+          ),
+
+          // ── Bar ───────────────────────────────────────────────────
+          if (showBar)
+            Positioned(
+              left: 0,
+              right: barRight,
+              bottom: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: _fabPadR,
+                    top: _pillOuterPadV,
+                    bottom: _pillOuterPadV,
+                  ),
+                  child: SlideTransition(
+                    position: _barSlide,
+                    child: _buildNavPill(),
+                  ),
+                ),
+              ),
+            ),
+
+          // ── Input ─────────────────────────────────────────────────
+          if (showInput)
+            Positioned(
+              left: 0,
+              right: barRight,
+              bottom: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: _fabPadR,
+                    top: _pillOuterPadV,
+                    bottom: _pillOuterPadV,
+                  ),
+                  child: SlideTransition(
+                    position: _inputSlide,
+                    child: InputPanel(
+                      controller: _textController,
+                      onSend: _sendMessage,
+                      onChanged: () => setState(() {}),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+          // ── FAB — slides off-screen when switching tabs ──────────
+          if (showFab)
+            Positioned(
+              right: fabRight,
+              bottom: 0,
+              child: Opacity(
+                opacity: fabOpacity,
+                child: SafeArea(
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(vertical: _pillOuterPadV),
+                    child: ChatFab(
+                      isExpanded: _isInputExpanded,
+                      hasText: _textController.text.trim().isNotEmpty,
+                      onTap: _handleFabTap,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
-      bottomNavigationBar: _buildBottomNav(),
     );
   }
 
-  /// Fixed width of the selection pill highlight.
-  static const double _pillWidth = 44;
-
-  // ── Glass capsule bottom nav ────────────────────────────────────
-  Widget _buildBottomNav() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  Widget _buildNavPill() {
     final tabCount = _icons.length;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        child: GlassContainer(
-          shape: const LiquidRoundedSuperellipse(borderRadius: 999),
-          settings: isDark ? GlassConfig.darkNavBar : GlassConfig.navBar,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final tabW = constraints.maxWidth / tabCount;
-              return SizedBox(
-                height: _pillWidth,
-                child: Stack(
-                  children: [
-                    // ── Sliding indicator with spring animation ──────────
-                    AnimatedPositioned(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOutCubic,
-                      left: _currentIndex * tabW + (tabW - _pillWidth) / 2,
-                      top: 0,
-                      bottom: 0,
-                      width: _pillWidth,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF6B6B6B).withValues(
-                            alpha: isDark ? 0.2 : 0.05,
-                          ),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
+    return GlassContainer(
+      shape: const LiquidRoundedSuperellipse(borderRadius: 999),
+      settings: GlassConfig.navBar,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 20,
+        vertical: _pillInnerPadV,
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final tabW = constraints.maxWidth / tabCount;
+          return SizedBox(
+            height: _pillWidth,
+            child: Stack(
+              children: [
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                  left: _currentIndex * tabW + (tabW - _pillWidth) / 2,
+                  top: 0,
+                  bottom: 0,
+                  width: _pillWidth,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6B6B6B).withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    // ── Tab tap targets ────────────────────────────────
-                    Row(
-                      children: [
-                        for (int i = 0; i < tabCount; i++)
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => setState(() => _currentIndex = i),
-                              behavior: HitTestBehavior.opaque,
-                              child: Center(
-                                child: Icon(
-                                  _icons[i],
-                                  color: _currentIndex == i
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                  size: 24,
-                                ),
-                              ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    for (int i = 0; i < tabCount; i++)
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => _switchTab(i),
+                          behavior: HitTestBehavior.opaque,
+                          child: Center(
+                            child: Icon(
+                              _icons[i],
+                              color: _currentIndex == i
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                              size: 24,
                             ),
                           ),
-                      ],
-                    ),
+                        ),
+                      ),
                   ],
                 ),
-              );
-            },
-          ),
-        ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

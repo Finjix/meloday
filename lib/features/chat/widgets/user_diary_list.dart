@@ -17,7 +17,6 @@ class UserDiaryList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     if (messages.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -46,7 +45,7 @@ class UserDiaryList extends StatelessWidget {
                 const SizedBox(height: 4),
                 GlassContainer(
                   shape: const LiquidRoundedSuperellipse(borderRadius: 16),
-                  settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
+                  settings: GlassConfig.card,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 20,
                     vertical: 12,

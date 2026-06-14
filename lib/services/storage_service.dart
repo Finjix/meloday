@@ -8,7 +8,6 @@ class StorageService {
   static const String _cardsBoxName = 'cards';
   static const String _settingsBoxName = 'settings';
   static const String _themeColorKey = 'themeColor';
-  static const String _themeModeKey = 'themeMode';
   static bool _hiveInitialized = false;
   Box<String>? _cardsBox;
   Box<String>? _settingsBox;
@@ -77,16 +76,6 @@ class StorageService {
 
   Future<String?> loadThemeColor() async {
     return _settingsBox?.get(_themeColorKey);
-  }
-
-  // ── Theme mode ────────────────────────────────────────────────────
-
-  Future<void> saveThemeMode(String mode) async {
-    await _settingsBox?.put(_themeModeKey, mode);
-  }
-
-  Future<String?> loadThemeMode() async {
-    return _settingsBox?.get(_themeModeKey);
   }
 
   // ── Serialization ─────────────────────────────────────────────────

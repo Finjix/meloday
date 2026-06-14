@@ -109,11 +109,10 @@ class _MusicPlayerState extends State<MusicPlayer> {
   @override
   Widget build(BuildContext context) {
     final isPlaying = _playerState == PlayerState.playing;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 16),
-      settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
+      settings: GlassConfig.card,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -171,7 +170,7 @@ class _MusicPlayerState extends State<MusicPlayer> {
             shape: const LiquidOval(
               side: BorderSide(color: GlassConfig.buttonRimWhite),
             ),
-            settings: isDark ? GlassConfig.darkInteractive : GlassConfig.interactive,
+            settings: GlassConfig.interactive,
             useOwnLayer: true,
             glowColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
             glowRadius: 1.2,

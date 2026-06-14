@@ -1,90 +1,133 @@
 // lib/features/chat/widgets/chat_input.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import '../../../core/glass_config.dart';
+import '../../../models/conversation_state.dart';
+import '../../chat/providers/conversation_provider.dart';
 
-/// A rectangular glass container with a text field and send button,
-/// centered on the page for diary-style input.
-class ChatInput extends StatefulWidget {
-  final bool enabled;
-  final ValueChanged<String> onSend;
+// ── ChatFab ────────────────────────────────────────────────────────────
+/// 60 px glass circle. Icon depends on state:
+/// - collapsed → ✎ (edit) — tap to expand
+/// - expanded + empty → ✕ (close) — tap to dismiss
+/// - expanded + has text → ✓ (send) — tap to send
+class ChatFab extends StatelessWidget {
+  final bool isExpanded;
+  final bool hasText;
+  final VoidCallback onTap;
 
-  const ChatInput({
+  const ChatFab({
     super.key,
-    this.enabled = true,
-    required this.onSend,
+    required this.isExpanded,
+    required this.hasText,
+    required this.onTap,
   });
 
   @override
-  State<ChatInput> createState() => _ChatInputState();
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.onSurfaceVariant;
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: GlassContainer(
+        shape: const LiquidOval(),
+        settings: GlassConfig.navBar,
+        padding: const EdgeInsets.all(18),
+        child: SizedBox.square(
+          dimension: 30,
+          child: Stack(
+            children: [
+              // ✎ — only when collapsed
+              Opacity(
+                opacity: isExpanded ? 0 : 1,
+                child: Icon(Icons.edit_rounded, size: 30, color: color),
+              ),
+              // ✕ — expanded + empty
+              Opacity(
+                opacity: (isExpanded && !hasText) ? 1 : 0,
+                child: Icon(Icons.close_rounded, size: 30, color: color),
+              ),
+              // ✓ — expanded + has text
+              Opacity(
+                opacity: (isExpanded && hasText) ? 1 : 0,
+                child: Icon(Icons.check_rounded, size: 30, color: color),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _ChatInputState extends State<ChatInput> {
-  final _controller = TextEditingController();
+// ── InputPanel ─────────────────────────────────────────────────────────
+/// Text input that replaces the nav bar when expanded.
+///
+/// Does NOT include a send button — the [ChatFab] handles that.
+class InputPanel extends ConsumerStatefulWidget {
+  final TextEditingController controller;
+  final VoidCallback onSend;
+  final VoidCallback onChanged;
+
+  const InputPanel({
+    super.key,
+    required this.controller,
+    required this.onSend,
+    required this.onChanged,
+  });
+
+  @override
+  ConsumerState<InputPanel> createState() => _InputPanelState();
+}
+
+class _InputPanelState extends ConsumerState<InputPanel> {
   final _focusNode = FocusNode();
 
-  void _handleSend() {
-    final text = _controller.text.trim();
-    if (text.isEmpty || !widget.enabled) return;
-    widget.onSend(text);
-    _controller.clear();
-    if (widget.enabled) _focusNode.requestFocus();
+  @override
+  void initState() {
+    super.initState();
   }
 
   @override
   void dispose() {
-    _controller.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isGenerating =
+        ref.watch(conversationProvider).status == ConvStatus.generating;
+
     return GlassContainer(
       shape: const LiquidRoundedSuperellipse(borderRadius: 16),
-      settings: isDark ? GlassConfig.darkCard : GlassConfig.card,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _controller,
-            focusNode: _focusNode,
-            enabled: widget.enabled,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontSize: 15,
-              height: 1.6,
-            ),
-            decoration: InputDecoration(
-              hintText: '写点什么吧...',
-              hintStyle: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontSize: 15,
-              ),
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
-            ),
-            textInputAction: TextInputAction.newline,
-            maxLines: 6,
-            minLines: 3,
-            autofocus: true,
+      settings: GlassConfig.navBar,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: TextField(
+        controller: widget.controller,
+        focusNode: _focusNode,
+        enabled: !isGenerating,
+        autofocus: false,
+        maxLines: 8,
+        minLines: 8,
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onSurface,
+          fontSize: 15,
+          height: 1.6,
+        ),
+        decoration: InputDecoration(
+          hintText: '写点什么吧...',
+          hintStyle: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontSize: 15,
           ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: IconButton(
-              icon: Icon(
-                Icons.send_rounded,
-                color: widget.enabled
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              onPressed: widget.enabled ? _handleSend : null,
-            ),
-          ),
-        ],
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.zero,
+        ),
+        textInputAction: TextInputAction.newline,
+        onChanged: (_) => widget.onChanged(),
+        onSubmitted: (_) => widget.onSend(),
       ),
     );
   }
