@@ -11,11 +11,11 @@ abstract final class GlassConfig {
 
   /// Unified light-mode glass settings (based on the bottom nav bar).
   static const LiquidGlassSettings light = LiquidGlassSettings(
-    blur: 1,
+    blur: 3,
     thickness: 1,
     lightIntensity: 3.0,
     lightAngle: lightAngle,
-    glassColor: Color.fromARGB(1, 0, 0, 0),
+    glassColor: Color.fromARGB(0, 255, 255, 255),
     refractiveIndex: 1,
     ambientStrength: 0.1,
     saturation: 1.0,

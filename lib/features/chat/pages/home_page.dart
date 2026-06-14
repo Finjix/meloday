@@ -1,12 +1,11 @@
 // lib/features/chat/pages/home_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/conversation_state.dart';
 import '../providers/conversation_provider.dart';
 import '../widgets/agent_header.dart';
-
 import '../widgets/generating_progress.dart';
-import '../widgets/user_diary_list.dart';
 import '../../card/widgets/music_card_compact.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -20,10 +19,13 @@ class _HomePageState extends ConsumerState<HomePage> {
   final _scrollController = ScrollController();
   int _lastMessageCount = 0;
 
+  static const _weekDays = [
+    '星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'
+  ];
+
   @override
   void initState() {
     super.initState();
-    // Trigger the greeting on first load.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final state = ref.read(conversationProvider);
       if (state.status == ConvStatus.idle) {
@@ -48,7 +50,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 
-
   void _handleRetry() {
     ref.read(conversationProvider.notifier).retryFromError();
   }
@@ -57,11 +58,9 @@ class _HomePageState extends ConsumerState<HomePage> {
     switch (state.status) {
       case ConvStatus.idle:
         return const SizedBox.shrink();
-
       case ConvStatus.greeting:
       case ConvStatus.chatting:
         return AgentHeader(message: state.agentMessage);
-
       case ConvStatus.generating:
         return Column(
           mainAxisSize: MainAxisSize.min,
@@ -76,7 +75,6 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
           ],
         );
-
       case ConvStatus.cardReady:
         return Column(
           mainAxisSize: MainAxisSize.min,
@@ -97,7 +95,6 @@ class _HomePageState extends ConsumerState<HomePage> {
               AgentHeader(message: state.agentMessage),
           ],
         );
-
       case ConvStatus.error:
         return Column(
           mainAxisSize: MainAxisSize.min,
@@ -109,7 +106,8 @@ class _HomePageState extends ConsumerState<HomePage> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               child: Row(
                 children: [
-                  Icon(Icons.error_outline, color: Theme.of(context).colorScheme.primary, size: 20),
+                  Icon(Icons.error_outline,
+                      color: Theme.of(context).colorScheme.primary, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -122,10 +120,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ),
                   TextButton(
                     onPressed: _handleRetry,
-                    child: Text(
-                      '重试',
-                      style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 14),
-                    ),
+                    child: Text('重试',
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontSize: 14)),
                   ),
                 ],
               ),
@@ -139,12 +137,10 @@ class _HomePageState extends ConsumerState<HomePage> {
   Widget build(BuildContext context) {
     final state = ref.watch(conversationProvider);
 
-    // Reset scroll tracking when conversation restarts
     if (state.status == ConvStatus.idle) {
       _lastMessageCount = 0;
     }
 
-    // Auto-scroll when a new user message is added.
     if (state.userMessages.length > _lastMessageCount) {
       _lastMessageCount = state.userMessages.length;
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
@@ -156,32 +152,122 @@ class _HomePageState extends ConsumerState<HomePage> {
       body: SafeArea(
         child: Column(
           children: [
-            // ── Top: Agent area ──────────────────────────────────────
             _buildAgentArea(state),
 
-            // ── Divider (only when user has messages) ────────────────
             if (showDivider)
-              Divider(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                height: 1,
-                thickness: 0.5,
-                indent: 20,
-                endIndent: 20,
-              ),
-
-            // ── Middle: User diary list ──────────────────────────────
-            Expanded(
-              child: UserDiaryList(
-                messages: state.userMessages,
-                scrollController: _scrollController,
-              ),
-            ),
-
-            // ── Bottom inset is handled by AppShell ────────────────────
-            const SizedBox(height: 1),
+              Expanded(
+                child: ShaderMask(
+                  shaderCallback: (bounds) {
+                    final bgColor = Theme.of(context).scaffoldBackgroundColor;
+                    final topFade = 20.0 / bounds.height;
+                    return LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        bgColor,
+                        bgColor,
+                        bgColor.withValues(alpha: 0),
+                        bgColor.withValues(alpha: 0),
+                      ],
+                      stops: [0.0, topFade * 0.2, topFade, 1.0],
+                    ).createShader(bounds);
+                  },
+                  blendMode: BlendMode.srcOver,
+                  child: ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(context).copyWith(
+                      dragDevices: {
+                        PointerDeviceKind.touch,
+                        PointerDeviceKind.mouse,
+                        PointerDeviceKind.trackpad,
+                      },
+                    ),
+                    child: ScrollbarTheme(
+                      data: const ScrollbarThemeData(
+                        thickness: WidgetStatePropertyAll(0),
+                      ),
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        padding: EdgeInsets.zero,
+                        itemCount: state.userMessages.length + 1,
+                        itemBuilder: (context, index) {
+                          if (index == 0) {
+                            return _buildDiaryHeader(
+                                context, state.userMessages.first.timestamp);
+                          }
+                          final msg = state.userMessages[index - 1];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 32),
+                              child: Text(
+                                msg.content,
+                                style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface,
+                                  fontSize: 17,
+                                  height: 1.8,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            else
+              const Expanded(child: SizedBox.shrink()),
           ],
         ),
       ),
     );
   }
+
+  Widget _buildDiaryHeader(BuildContext context, DateTime timestamp) {
+    final weekday = _weekDays[timestamp.weekday - 1];
+    final dateStr = '${timestamp.month}月${timestamp.day}日';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        children: [
+          Text(
+            weekday,
+            style: TextStyle(
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurfaceVariant
+                  .withValues(alpha: 0.5),
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            dateStr,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 22,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: 32,
+            height: 2,
+            decoration: BoxDecoration(
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurfaceVariant
+                  .withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(1),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
+

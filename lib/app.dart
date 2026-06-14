@@ -175,7 +175,7 @@ class _AppShellState extends ConsumerState<AppShell>
             top: 0,
             left: 0,
             right: 0,
-            bottom: _isInputExpanded ? 0 : rowHeight,
+            bottom: rowHeight,
             child: GestureDetector(
               onTap: _isInputExpanded ? _toggleInput : null,
               behavior: HitTestBehavior.opaque,
@@ -190,6 +190,31 @@ class _AppShellState extends ConsumerState<AppShell>
               ),
             ),
           ),
+
+          // ── Bottom gradient fade (aligned with nav pill glass top) ──
+          if (showBar)
+            Positioned(
+              bottom: rowHeight - _pillOuterPadV,
+              left: 0,
+              right: 0,
+              height: 80,
+              child: IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0),
+                        Theme.of(context).scaffoldBackgroundColor,
+                        Theme.of(context).scaffoldBackgroundColor,
+                      ],
+                      stops: const [0.0, 0.8, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            ),
 
           // ── Bar ───────────────────────────────────────────────────
           if (showBar)
