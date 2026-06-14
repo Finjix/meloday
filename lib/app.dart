@@ -57,21 +57,21 @@ class _AppShellState extends ConsumerState<AppShell>
     super.initState();
     _slideController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 800),
     );
     _barSlide = Tween<Offset>(
       begin: Offset.zero,
       end: const Offset(0, 1.5),
     ).animate(CurvedAnimation(
       parent: _slideController,
-      curve: const Interval(0.0, 0.5, curve: Curves.easeInOut),
+      curve: const Interval(0.0, 0.375, curve: Curves.easeInOut),
     ));
     _inputSlide = Tween<Offset>(
       begin: const Offset(0, 1.3),
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _slideController,
-      curve: const Interval(0.5, 1.0, curve: Curves.easeInOut),
+      curve: const Interval(0.375, 1.0, curve: Curves.easeInOut),
     ));
     _slideController.addStatusListener((status) {
       if (status == AnimationStatus.dismissed) setState(() {});

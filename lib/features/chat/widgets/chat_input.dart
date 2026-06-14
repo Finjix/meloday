@@ -31,7 +31,7 @@ class ChatFab extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: GlassContainer(
-        shape: const LiquidOval(),
+        shape: const LiquidRoundedSuperellipse(borderRadius: 999),
         settings: GlassConfig.navBar,
         padding: const EdgeInsets.all(18),
         child: SizedBox.square(

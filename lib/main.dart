@@ -47,7 +47,7 @@ class MainApp extends ConsumerWidget {
       title: 'Meloday',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightThemeFromHex(accentHex),
-      themeAnimationDuration: Duration.zero,
+      themeAnimationDuration: const Duration(milliseconds: 400),
       home: const AppShell(),
       onGenerateRoute: (settings) {
         if (settings.name == '/card') {
