@@ -80,12 +80,18 @@ abstract final class GlassConfig {
   /// 顶部渐变遮罩高度 — 与顶部 Agent 容器重合，让文本向上滚动时逐渐淡出。
   static const double topFadeHeight = 110;
 
-  /// 顶部渐变断点 — 控制顶部淡出的快慢。[0]=起始,[1]=结束。间距越小过渡越急。
+  /// 顶部渐变断点 — 控制顶部淡出的快慢。默认均匀过渡，可调整为 e.g. [0.0, 0.5] 加快淡出。
   static const List<double> topFadeStops = [0.0, 1.0];
 
-  /// 底部渐变遮罩高度 — 在导航栏上方，让内容向下滚动时逐渐淡出。
-  static const double bottomFadeHeight = 144;
+  /// 底部渐变在导航栏上方的额外淡出高度。
+  /// 实际渐变总高度 = 导航栏总高度（安全区 + 填充 + 胶囊） + 此值。
+  static const double bottomFadePadding = 56;
 
-  /// 底部渐变断点 — 控制底部淡出的快慢。[0]=起始,[1]=结束。间距越小过渡越急。
+  /// 底部渐变断点 — 控制底部淡出的快慢。默认均匀过渡。
   static const List<double> bottomFadeStops = [0.0, 1.0];
+
+  // ── Layout 布局 ───────────────────────────────────────────────────
+
+  /// 内容最大宽度 — 页面内容在宽屏时的最大水平宽度。
+  static const double maxContentWidth = 680;
 }

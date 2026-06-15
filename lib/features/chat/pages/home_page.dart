@@ -18,11 +18,14 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage> {
   final _scrollController = ScrollController();
-  int _lastMessageCount = 0;
 
   static const _weekDays = [
     '星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'
   ];
+
+  /// Number of leading non-message items in the ListView
+  /// (spacer at index 0, diary header at index 1).
+  static const _leadingItemCount = 2;
 
   @override
   void initState() {
@@ -136,35 +139,35 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(conversationProvider, (prev, next) {
+      final prevLen = prev?.userMessages.length ?? 0;
+      if (next.userMessages.length > prevLen) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      }
+    });
+
     final state = ref.watch(conversationProvider);
+    final theme = Theme.of(context);
+    final bgColor = theme.scaffoldBackgroundColor;
+    final textColor = theme.colorScheme.onSurface;
 
-    if (state.status == ConvStatus.idle) {
-      _lastMessageCount = 0;
-    }
-
-    if (state.userMessages.length > _lastMessageCount) {
-      _lastMessageCount = state.userMessages.length;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-    }
-
-    final showDivider = state.userMessages.isNotEmpty;
+    final hasMessages = state.userMessages.isNotEmpty;
+    final agentArea = _buildAgentArea(state);
 
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 680),
-            child: Stack(
+        child: Stack(
           children: [
             // ── Scrollable diary content (behind agent header) ──
-            if (showDivider)
+            if (hasMessages)
               ScrollConfiguration(
                 behavior: ScrollConfiguration.of(context).copyWith(
                   dragDevices: {
                     PointerDeviceKind.touch,
                     PointerDeviceKind.mouse,
                     PointerDeviceKind.trackpad,
+                    PointerDeviceKind.stylus,
                   },
                 ),
                 child: ScrollbarTheme(
@@ -174,30 +177,29 @@ class _HomePageState extends ConsumerState<HomePage> {
                   child: ListView.builder(
                     controller: _scrollController,
                     padding: EdgeInsets.zero,
-                    itemCount: state.userMessages.length + 2,
+                    itemCount:
+                        state.userMessages.length + _leadingItemCount,
                     itemBuilder: (context, index) {
                       // Transparent spacer matching agent area height
                       if (index == 0) {
                         return Opacity(
                           opacity: 0,
-                          child: IgnorePointer(
-                            child: _buildAgentArea(state),
-                          ),
+                          child: IgnorePointer(child: agentArea),
                         );
                       }
                       if (index == 1) {
                         return _buildDiaryHeader(
                             context, state.userMessages.first.timestamp);
                       }
-                      final msg = state.userMessages[index - 2];
+                      final msg =
+                          state.userMessages[index - _leadingItemCount];
                       return Padding(
                         padding: const EdgeInsets.only(
                             bottom: 16, left: 32, right: 32),
                         child: Text(
                           msg.content,
                           style: TextStyle(
-                            color:
-                                Theme.of(context).colorScheme.onSurface,
+                            color: textColor,
                             fontSize: 17,
                             height: 1.8,
                           ),
@@ -209,25 +211,24 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
 
             // ── Top gradient fade — content fades before agent header ──
-            if (showDivider)
+            if (hasMessages)
               Positioned(
                 top: 0,
                 left: 0,
                 right: 0,
                 height: GlassConfig.topFadeHeight,
                 child: IgnorePointer(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Theme.of(context).scaffoldBackgroundColor,
-                          Theme.of(context)
-                              .scaffoldBackgroundColor
-                              .withValues(alpha: 0),
-                        ],
-                        stops: GlassConfig.topFadeStops,
+                  child: RepaintBoundary(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            bgColor,
+                            bgColor.withValues(alpha: 0),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -239,11 +240,9 @@ class _HomePageState extends ConsumerState<HomePage> {
               top: 0,
               left: 0,
               right: 0,
-              child: _buildAgentArea(state),
+              child: agentArea,
             ),
           ],
-            ),
-          ),
         ),
       ),
     );
@@ -254,7 +253,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     final dateStr = '${timestamp.month}月${timestamp.day}日';
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
       child: Column(
         children: [
           Text(

@@ -133,9 +133,13 @@ class _AppShellState extends ConsumerState<AppShell>
     if (text.isEmpty) return;
     final status = ref.read(conversationProvider).status;
     if (status == ConvStatus.generating) return;
-    ref.read(conversationProvider.notifier).sendMessage(text);
-    _textController.clear();
-    _toggleInput();
+    try {
+      ref.read(conversationProvider.notifier).sendMessage(text);
+      _textController.clear();
+      _toggleInput();
+    } catch (_) {
+      // Keep text and input open on failure
+    }
   }
 
   void _switchTab(int index) {
@@ -157,6 +161,12 @@ class _AppShellState extends ConsumerState<AppShell>
     final showBar =
         !_isInputExpanded || !_slideController.isCompleted;
 
+    // Adaptive bottom fade: nav bar total height + extra fade zone
+    final safeBottom = MediaQuery.of(context).padding.bottom;
+    final barTotalHeight =
+        safeBottom + _pillOuterPadV * 2 + _pillInnerPadV * 2 + _pillWidth;
+    final bottomFadeHeight = barTotalHeight + GlassConfig.bottomFadePadding;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(
@@ -165,7 +175,6 @@ class _AppShellState extends ConsumerState<AppShell>
           // Note: AnimatedSwitcher destroys the old page on tab
           // switch, resetting local widget state (scroll position
           // etc.). Conversation state lives in Riverpod and survives.
-          // TODO: preserve scroll position in a provider if needed.
           Positioned(
             top: 0,
             left: 0,
@@ -180,32 +189,39 @@ class _AppShellState extends ConsumerState<AppShell>
                 switchOutCurve: Curves.easeIn,
                 child: KeyedSubtree(
                   key: ValueKey(_currentIndex),
-                  child: _pages[_currentIndex],
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints:
+                          const BoxConstraints(maxWidth: GlassConfig.maxContentWidth),
+                      child: _pages[_currentIndex],
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
 
-          // ── Bottom gradient fade — content fades before nav bar ──
+          // ── Bottom gradient fade — height adapts to nav bar ──
           if (showBar || showInput)
             Positioned(
               bottom: 0,
               left: 0,
               right: 0,
-              height: GlassConfig.bottomFadeHeight,
+              height: bottomFadeHeight,
               child: IgnorePointer(
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Theme.of(context)
-                            .scaffoldBackgroundColor
-                            .withValues(alpha: 0),
-                        Theme.of(context).scaffoldBackgroundColor,
-                      ],
-                      stops: GlassConfig.bottomFadeStops,
+                child: RepaintBoundary(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Theme.of(context)
+                              .scaffoldBackgroundColor
+                              .withValues(alpha: 0),
+                          Theme.of(context).scaffoldBackgroundColor,
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -216,7 +232,7 @@ class _AppShellState extends ConsumerState<AppShell>
           // ── tabAnim ticks, not the entire AppShell.              ──
           AnimatedBuilder(
             animation: _tabAnim,
-            builder: (context, _) {
+            builder: (context, child) {
               final t = _tabAnim.value;
               final showFab = _currentIndex == 0 || _tabAnim.isAnimating;
               final barRight = _fabPadR + _fabArea * (1 - t);
@@ -240,7 +256,7 @@ class _AppShellState extends ConsumerState<AppShell>
                           ),
                           child: SlideTransition(
                             position: _barSlide,
-                            child: _buildNavPill(),
+                            child: child,
                           ),
                         ),
                       ),
@@ -299,6 +315,7 @@ class _AppShellState extends ConsumerState<AppShell>
                 ],
               );
             },
+            child: _buildNavPill(),
           ),
         ],
       ),
