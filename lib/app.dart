@@ -150,18 +150,12 @@ class _AppShellState extends ConsumerState<AppShell>
     setState(() => _currentIndex = index);
   }
 
-  double _bottomRowHeight(BuildContext context) {
-    final safeBottom = MediaQuery.of(context).padding.bottom;
-    return safeBottom + _pillOuterPadV * 2 + _pillInnerPadV * 2 + _pillWidth;
-  }
-
   @override
   Widget build(BuildContext context) {
     final showInput =
         _currentIndex == 0 && (_isInputExpanded || _slideController.isAnimating);
     final showBar =
         !_isInputExpanded || !_slideController.isCompleted;
-    final rowHeight = _bottomRowHeight(context);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -176,7 +170,7 @@ class _AppShellState extends ConsumerState<AppShell>
             top: 0,
             left: 0,
             right: 0,
-            bottom: rowHeight,
+            bottom: 0,
             child: GestureDetector(
               onTap: _isInputExpanded ? _toggleInput : null,
               behavior: HitTestBehavior.opaque,
@@ -192,13 +186,13 @@ class _AppShellState extends ConsumerState<AppShell>
             ),
           ),
 
-          // ── Bottom gradient fade (aligned with nav pill glass top) ──
-          if (showBar)
+          // ── Bottom gradient fade — content fades before nav bar ──
+          if (showBar || showInput)
             Positioned(
-              bottom: rowHeight - _pillOuterPadV,
+              bottom: 0,
               left: 0,
               right: 0,
-              height: 80,
+              height: GlassConfig.bottomFadeHeight,
               child: IgnorePointer(
                 child: Container(
                   decoration: BoxDecoration(
@@ -206,12 +200,12 @@ class _AppShellState extends ConsumerState<AppShell>
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        Theme.of(context).scaffoldBackgroundColor
+                        Theme.of(context)
+                            .scaffoldBackgroundColor
                             .withValues(alpha: 0),
                         Theme.of(context).scaffoldBackgroundColor,
-                        Theme.of(context).scaffoldBackgroundColor,
                       ],
-                      stops: const [0.0, 0.8, 1.0],
+                      stops: GlassConfig.bottomFadeStops,
                     ),
                   ),
                 ),

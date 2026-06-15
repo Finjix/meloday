@@ -7,6 +7,7 @@ import '../providers/conversation_provider.dart';
 import '../widgets/agent_header.dart';
 import '../widgets/generating_progress.dart';
 import '../../card/widgets/music_card_compact.dart';
+import '../../../core/glass_config.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -147,80 +148,96 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
 
     final showDivider = state.userMessages.isNotEmpty;
-    final bgColor = Theme.of(context).scaffoldBackgroundColor;
 
     return Scaffold(
-      backgroundColor: bgColor,
       body: SafeArea(
         bottom: false,
-        child: Column(
+        child: Stack(
           children: [
-            _buildAgentArea(state),
-
+            // ── Scrollable diary content (behind agent header) ──
             if (showDivider)
-              Expanded(
-                child: ShaderMask(
-                  shaderCallback: (bounds) {
-                    final t = bounds.height > 0
-                        ? (20.0 / bounds.height).clamp(0.0, 0.2)
-                        : 0.02;
-                    return LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        bgColor,
-                        bgColor,
-                        bgColor.withValues(alpha: 0),
-                        bgColor.withValues(alpha: 0),
-                      ],
-                      stops: [0.0, t * 0.2, t, 1.0],
-                    ).createShader(bounds);
+              ScrollConfiguration(
+                behavior: ScrollConfiguration.of(context).copyWith(
+                  dragDevices: {
+                    PointerDeviceKind.touch,
+                    PointerDeviceKind.mouse,
+                    PointerDeviceKind.trackpad,
                   },
-                  blendMode: BlendMode.srcOver,
-                  child: ScrollConfiguration(
-                    behavior: ScrollConfiguration.of(context).copyWith(
-                      dragDevices: {
-                        PointerDeviceKind.touch,
-                        PointerDeviceKind.mouse,
-                        PointerDeviceKind.trackpad,
-                      },
-                    ),
-                    child: ScrollbarTheme(
-                      data: const ScrollbarThemeData(
-                        thickness: WidgetStatePropertyAll(0),
-                      ),
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        padding: EdgeInsets.zero,
-                        itemCount: state.userMessages.length + 1,
-                        itemBuilder: (context, index) {
-                          if (index == 0) {
-                            return _buildDiaryHeader(
-                                context, state.userMessages.first.timestamp);
-                          }
-                          final msg = state.userMessages[index - 1];
-                          return Padding(
-                            padding: const EdgeInsets.only(
-                                bottom: 16, left: 32, right: 32),
-                            child: Text(
-                              msg.content,
-                              style: TextStyle(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface,
-                                fontSize: 17,
-                                height: 1.8,
-                              ),
-                            ),
-                          );
-                        },
+                ),
+                child: ScrollbarTheme(
+                  data: const ScrollbarThemeData(
+                    thickness: WidgetStatePropertyAll(0),
+                  ),
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    padding: EdgeInsets.zero,
+                    itemCount: state.userMessages.length + 2,
+                    itemBuilder: (context, index) {
+                      // Transparent spacer matching agent area height
+                      if (index == 0) {
+                        return Opacity(
+                          opacity: 0,
+                          child: IgnorePointer(
+                            child: _buildAgentArea(state),
+                          ),
+                        );
+                      }
+                      if (index == 1) {
+                        return _buildDiaryHeader(
+                            context, state.userMessages.first.timestamp);
+                      }
+                      final msg = state.userMessages[index - 2];
+                      return Padding(
+                        padding: const EdgeInsets.only(
+                            bottom: 16, left: 32, right: 32),
+                        child: Text(
+                          msg.content,
+                          style: TextStyle(
+                            color:
+                                Theme.of(context).colorScheme.onSurface,
+                            fontSize: 17,
+                            height: 1.8,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+
+            // ── Top gradient fade — content fades before agent header ──
+            if (showDivider)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: GlassConfig.topFadeHeight,
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Theme.of(context).scaffoldBackgroundColor,
+                          Theme.of(context)
+                              .scaffoldBackgroundColor
+                              .withValues(alpha: 0),
+                        ],
+                        stops: GlassConfig.topFadeStops,
                       ),
                     ),
                   ),
                 ),
-              )
-            else
-              const Expanded(child: SizedBox.shrink()),
+              ),
+
+            // ── Agent header overlay (glass effect shows content through) ──
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _buildAgentArea(state),
+            ),
           ],
         ),
       ),
