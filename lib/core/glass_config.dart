@@ -15,7 +15,7 @@ abstract final class GlassConfig {
   /// 统一浅色模式玻璃材质参数（以底部导航栏为基准）。
   static const LiquidGlassSettings light = LiquidGlassSettings(
     /// 模糊半径 — 控制背景透过玻璃后的模糊程度。值越大越模糊，0 为完全透明。
-    blur: 3,
+    blur: 5,
 
     /// 厚度 — 玻璃体的视觉厚度，影响折射偏移和边缘效果。
     thickness: 1,

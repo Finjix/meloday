@@ -152,7 +152,10 @@ class _HomePageState extends ConsumerState<HomePage> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: Stack(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: Stack(
           children: [
             // ── Scrollable diary content (behind agent header) ──
             if (showDivider)
@@ -239,6 +242,8 @@ class _HomePageState extends ConsumerState<HomePage> {
               child: _buildAgentArea(state),
             ),
           ],
+            ),
+          ),
         ),
       ),
     );
