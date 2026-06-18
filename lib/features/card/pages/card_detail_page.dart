@@ -112,6 +112,7 @@ class CardDetailPage extends ConsumerWidget {
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: 14,
+                fontFamily: AppTheme.diaryFontFamily,
               ),
             ),
             const SizedBox(height: 16),
@@ -122,6 +123,7 @@ class CardDetailPage extends ConsumerWidget {
                 color: Theme.of(context).colorScheme.onSurface,
                 fontSize: 16,
                 height: 1.6,
+                fontFamily: AppTheme.diaryFontFamily,
               ),
             ),
             const SizedBox(height: 24),
@@ -375,6 +377,7 @@ class CardDetailPage extends ConsumerWidget {
                         color: Theme.of(context).colorScheme.onSurface,
                         fontSize: 15,
                         height: 1.8,
+                        fontFamily: AppTheme.diaryFontFamily,
                       ),
                     ),
                   ),

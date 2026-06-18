@@ -186,6 +186,7 @@ class _TimelineRow extends StatelessWidget {
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
+                      fontFamily: AppTheme.diaryFontFamily,
                     ),
                   ),
                 ),

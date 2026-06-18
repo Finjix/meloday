@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import '../../../core/glass_config.dart';
+import '../../../core/theme.dart';
 
 // ── ChatFab ────────────────────────────────────────────────────────────
 /// 60 px glass circle. Icon depends on state:
@@ -89,12 +90,14 @@ class InputPanel extends StatelessWidget {
           color: Theme.of(context).colorScheme.onSurface,
           fontSize: 15,
           height: 1.6,
+          fontFamily: AppTheme.diaryFontFamily,
         ),
         decoration: InputDecoration(
           hintText: '写点什么吧...',
           hintStyle: TextStyle(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
             fontSize: 15,
+            fontFamily: AppTheme.diaryFontFamily,
           ),
           border: InputBorder.none,
           contentPadding: EdgeInsets.zero,

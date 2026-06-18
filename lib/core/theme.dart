@@ -4,6 +4,12 @@ class AppTheme {
   static const String defaultAccentHex = '#E88DAA';
   static const Color defaultAccent = Color(0xFFE88DAA);
 
+  /// Default font family — a warm handwritten KaiTi style.
+  static const String defaultFontFamily = 'LXGW WenKai';
+
+  /// Font family for diary content — cute, rounded handwriting.
+  static const String diaryFontFamily = 'ZCOOL KuaiLe';
+
   static const Color surfaceLightMedium = Color(0xFFEDE4F0);
 
   static const Color accent = Color(0xFFE88DAA);
@@ -44,7 +50,7 @@ class AppTheme {
         onSurface: const Color(0xFF3C3C3C),
         onSurfaceVariant: const Color(0xFF6B6B6B),
       ),
-      fontFamily: 'Roboto',
+      fontFamily: defaultFontFamily,
     );
   }
 }

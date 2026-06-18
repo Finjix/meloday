@@ -8,6 +8,7 @@ import '../widgets/agent_header.dart';
 import '../widgets/generating_progress.dart';
 import '../../card/widgets/music_card_compact.dart';
 import '../../../core/glass_config.dart';
+import '../../../core/theme.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -202,6 +203,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             color: textColor,
                             fontSize: 17,
                             height: 1.8,
+                            fontFamily: AppTheme.diaryFontFamily,
                           ),
                         ),
                       );
@@ -264,6 +266,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   .onSurfaceVariant
                   .withValues(alpha: 0.5),
               fontSize: 13,
+              fontFamily: AppTheme.diaryFontFamily,
             ),
           ),
           const SizedBox(height: 4),
@@ -273,6 +276,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               color: Theme.of(context).colorScheme.onSurface,
               fontSize: 22,
               fontWeight: FontWeight.w500,
+              fontFamily: AppTheme.diaryFontFamily,
             ),
           ),
           const SizedBox(height: 10),
