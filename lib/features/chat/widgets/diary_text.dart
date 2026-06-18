@@ -11,6 +11,7 @@ class DiaryText extends StatefulWidget {
   final String text;
   final TextStyle style;
   final Duration? delay;
+  final Duration? durationOverride;
   final VoidCallback? onComplete;
 
   const DiaryText(
@@ -18,6 +19,7 @@ class DiaryText extends StatefulWidget {
     super.key,
     required this.style,
     this.delay,
+    this.durationOverride,
     this.onComplete,
   });
 
@@ -36,9 +38,9 @@ class _DiaryTextState extends State<DiaryText>
   @override
   void initState() {
     super.initState();
-    // Placeholder duration; corrected on first layout.
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 2000),
+      duration: widget.durationOverride ??
+          const Duration(milliseconds: 2000),
       vsync: this,
     )..addStatusListener((s) {
         if (s == AnimationStatus.completed) widget.onComplete?.call();
@@ -95,8 +97,15 @@ class _DiaryTextState extends State<DiaryText>
       builder: (context, constraints) {
         final w = constraints.maxWidth;
 
-        // Re-split only when the container width changes.
-        if (w != _lastWidth && w > 0 && w.isFinite) {
+        // Re-split only when the container width changes, unless duration is
+        // overridden (then we still need to split lines for rendering).
+        if (widget.durationOverride != null) {
+          if (w != _lastWidth && w > 0 && w.isFinite) {
+            _lastWidth = w;
+            _lines = _splitLines(
+                widget.text, w, widget.style.fontSize ?? 17);
+          }
+        } else if (w != _lastWidth && w > 0 && w.isFinite) {
           _lastWidth = w;
           _lines = _splitLines(
               widget.text, w, widget.style.fontSize ?? 17);

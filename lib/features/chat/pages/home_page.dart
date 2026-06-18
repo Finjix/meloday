@@ -30,9 +30,9 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// (spacer at index 0, diary header at index 1).
   static const _leadingItemCount = 2;
 
-  /// Header animation time: weekday (750) + date (750) + divider delay (1500)
-  /// + divider fade (500) ≈ 2000 ms.
-  static const int _headerAnimMs = 2000;
+  /// Header animation time: weekday (400) + date (500) + divider (300)
+  /// ≈ 1500 ms with buffer.
+  static const int _headerAnimMs = 1500;
 
   @override
   void initState() {
@@ -295,51 +295,10 @@ class _HomePageState extends ConsumerState<HomePage> {
     final weekday = _weekDays[timestamp.weekday - 1];
     final dateStr = '${timestamp.month}月${timestamp.day}日';
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
-      child: Column(
-        children: [
-          DiaryText(
-            weekday,
-            key: ValueKey('weekday_$weekday'),
-            style: TextStyle(
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurfaceVariant
-                  .withValues(alpha: 0.5),
-              fontSize: 13,
-              fontFamily: AppTheme.diaryFontFamily,
-            ),
-          ),
-          const SizedBox(height: 4),
-          DiaryText(
-            dateStr,
-            key: ValueKey('date_$dateStr'),
-            delay: const Duration(milliseconds: 750),
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontSize: 22,
-              fontWeight: FontWeight.w500,
-              fontFamily: AppTheme.diaryFontFamily,
-            ),
-          ),
-          const SizedBox(height: 10),
-          _FadeInDivider(
-            delay: const Duration(milliseconds: 1500),
-            child: Container(
-              width: 32,
-              height: 2,
-              decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurfaceVariant
-                    .withValues(alpha: 0.25),
-                borderRadius: BorderRadius.circular(1),
-              ),
-            ),
-          ),
-        ],
-      ),
+    return _DiaryHeader(
+      key: ValueKey('header_$dateStr'),
+      weekday: weekday,
+      dateStr: dateStr,
     );
   }
 }
@@ -365,7 +324,7 @@ class _FadeInDividerState extends State<_FadeInDivider>
   void initState() {
     super.initState();
     _ctrl = AnimationController(
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 300),
       vsync: this,
     );
     Future.delayed(widget.delay, () {
@@ -382,5 +341,86 @@ class _FadeInDividerState extends State<_FadeInDivider>
   @override
   Widget build(BuildContext context) {
     return FadeTransition(opacity: _ctrl, child: widget.child);
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Diary header — chains weekday → date → divider animations via onComplete.
+// ──────────────────────────────────────────────────────────────────────────────
+class _DiaryHeader extends StatefulWidget {
+  final String weekday;
+  final String dateStr;
+
+  const _DiaryHeader({
+    super.key,
+    required this.weekday,
+    required this.dateStr,
+  });
+
+  @override
+  State<_DiaryHeader> createState() => _DiaryHeaderState();
+}
+
+class _DiaryHeaderState extends State<_DiaryHeader> {
+  bool _showDate = false;
+  bool _showDivider = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
+      child: Column(
+        children: [
+          DiaryText(
+            widget.weekday,
+            key: const ValueKey('diary_header_weekday'),
+            durationOverride: const Duration(milliseconds: 400),
+            onComplete: () {
+              if (mounted) setState(() => _showDate = true);
+            },
+            style: TextStyle(
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurfaceVariant
+                  .withValues(alpha: 0.5),
+              fontSize: 13,
+              fontFamily: AppTheme.diaryFontFamily,
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (_showDate)
+            DiaryText(
+              widget.dateStr,
+              key: const ValueKey('diary_header_date'),
+              durationOverride: const Duration(milliseconds: 500),
+              onComplete: () {
+                if (mounted) setState(() => _showDivider = true);
+              },
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: 22,
+                fontWeight: FontWeight.w500,
+                fontFamily: AppTheme.diaryFontFamily,
+              ),
+            ),
+          const SizedBox(height: 10),
+          if (_showDivider)
+            _FadeInDivider(
+              delay: Duration.zero,
+              child: Container(
+                width: 32,
+                height: 2,
+                decoration: BoxDecoration(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurfaceVariant
+                      .withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(1),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

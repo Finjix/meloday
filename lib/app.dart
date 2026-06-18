@@ -178,9 +178,8 @@ class _AppShellState extends ConsumerState<AppShell>
       body: Stack(
         children: [
           // ── Page content ──────────────────────────────────────────
-          // Note: AnimatedSwitcher destroys the old page on tab
-          // switch, resetting local widget state (scroll position
-          // etc.). Conversation state lives in Riverpod and survives.
+          // IndexedStack keeps all pages alive so local widget state
+          // (animations, scroll position) survives tab switches.
           Positioned(
             top: 0,
             left: 0,
@@ -189,20 +188,15 @@ class _AppShellState extends ConsumerState<AppShell>
             child: GestureDetector(
               onTap: _isInputExpanded ? _toggleInput : null,
               behavior: HitTestBehavior.opaque,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 280),
-                switchInCurve: Curves.easeOut,
-                switchOutCurve: Curves.easeIn,
-                child: KeyedSubtree(
-                  key: ValueKey(_currentIndex),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints:
-                          const BoxConstraints(maxWidth: GlassConfig.maxContentWidth),
-                      child: _pages[_currentIndex],
-                    ),
+              child: IndexedStack(
+                index: _currentIndex,
+                children: _pages.map((page) => Center(
+                  child: ConstrainedBox(
+                    constraints:
+                        const BoxConstraints(maxWidth: GlassConfig.maxContentWidth),
+                    child: page,
                   ),
-                ),
+                )).toList(),
               ),
             ),
           ),
