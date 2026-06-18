@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/conversation_state.dart';
+import '../../../models/chat_message.dart';
 import '../providers/conversation_provider.dart';
 import '../widgets/agent_header.dart';
 import '../widgets/generating_progress.dart';
+import '../widgets/diary_text.dart';
 import '../../card/widgets/music_card_compact.dart';
 import '../../../core/glass_config.dart';
 import '../../../core/theme.dart';
@@ -27,6 +29,10 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// Number of leading non-message items in the ListView
   /// (spacer at index 0, diary header at index 1).
   static const _leadingItemCount = 2;
+
+  /// Header animation time: weekday (750) + date (750) + divider delay (1500)
+  /// + divider fade (500) ≈ 2000 ms.
+  static const int _headerAnimMs = 2000;
 
   @override
   void initState() {
@@ -59,6 +65,23 @@ class _HomePageState extends ConsumerState<HomePage> {
     ref.read(conversationProvider.notifier).retryFromError();
   }
 
+  /// Estimate how long a message's reveal animation will take (ms).
+  int _estMessageMs(String text) {
+    // Rough estimate: ~20 CJK chars or ~30 Latin chars per line.
+    final estimatedLines = (text.length / 20).ceil().clamp(1, 100);
+    return estimatedLines * 650 + 150;
+  }
+
+  /// Cumulative delay for a message at [msgIndex], so each message starts
+  /// only after every previous one has finished.
+  Duration _msgDelay(List<ChatMessage> messages, int msgIndex) {
+    int total = _headerAnimMs;
+    for (int i = 0; i < msgIndex; i++) {
+      total += _estMessageMs(messages[i].content);
+    }
+    return Duration(milliseconds: total);
+  }
+
   Widget _buildAgentArea(ConversationState state) {
     switch (state.status) {
       case ConvStatus.idle:
@@ -87,7 +110,8 @@ class _HomePageState extends ConsumerState<HomePage> {
           children: [
             if (state.currentCard != null)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: MusicCardCompact(
                   card: state.currentCard!,
                   onTap: () => Navigator.of(context).pushNamed(
@@ -108,11 +132,13 @@ class _HomePageState extends ConsumerState<HomePage> {
             if (state.agentMessage != null)
               AgentHeader(message: state.agentMessage),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               child: Row(
                 children: [
                   Icon(Icons.error_outline,
-                      color: Theme.of(context).colorScheme.primary, size: 20),
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -143,7 +169,8 @@ class _HomePageState extends ConsumerState<HomePage> {
     ref.listen(conversationProvider, (prev, next) {
       final prevLen = prev?.userMessages.length ?? 0;
       if (next.userMessages.length > prevLen) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _scrollToBottom());
       }
     });
 
@@ -152,8 +179,16 @@ class _HomePageState extends ConsumerState<HomePage> {
     final bgColor = theme.scaffoldBackgroundColor;
     final textColor = theme.colorScheme.onSurface;
 
-    final hasMessages = state.userMessages.isNotEmpty;
+    /// Show the diary area only after the user first taps the compose FAB.
+    final showDiary = state.hasExpandedInput;
     final agentArea = _buildAgentArea(state);
+
+    // Timestamp for the diary header — uses the first message's time,
+    // or falls back to now when no messages have been sent yet.
+    final headerTimestamp =
+        state.userMessages.isNotEmpty
+            ? state.userMessages.first.timestamp
+            : DateTime.now();
 
     return Scaffold(
       body: SafeArea(
@@ -161,7 +196,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         child: Stack(
           children: [
             // ── Scrollable diary content (behind agent header) ──
-            if (hasMessages)
+            if (showDiary)
               ScrollConfiguration(
                 behavior: ScrollConfiguration.of(context).copyWith(
                   dragDevices: {
@@ -189,16 +224,22 @@ class _HomePageState extends ConsumerState<HomePage> {
                         );
                       }
                       if (index == 1) {
-                        return _buildDiaryHeader(
-                            context, state.userMessages.first.timestamp);
+                        return _buildDiaryHeader(context, headerTimestamp);
                       }
+
                       final msg =
                           state.userMessages[index - _leadingItemCount];
+                      final msgIndex = index - _leadingItemCount;
+                      final delay =
+                          _msgDelay(state.userMessages, msgIndex);
+
                       return Padding(
                         padding: const EdgeInsets.only(
                             bottom: 16, left: 32, right: 32),
-                        child: Text(
+                        child: DiaryText(
                           msg.content,
+                          key: ValueKey(msg.id),
+                          delay: delay,
                           style: TextStyle(
                             color: textColor,
                             fontSize: 17,
@@ -213,7 +254,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
 
             // ── Top gradient fade — content fades before agent header ──
-            if (hasMessages)
+            if (showDiary)
               Positioned(
                 top: 0,
                 left: 0,
@@ -258,8 +299,9 @@ class _HomePageState extends ConsumerState<HomePage> {
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
       child: Column(
         children: [
-          Text(
+          DiaryText(
             weekday,
+            key: ValueKey('weekday_$weekday'),
             style: TextStyle(
               color: Theme.of(context)
                   .colorScheme
@@ -270,8 +312,10 @@ class _HomePageState extends ConsumerState<HomePage> {
             ),
           ),
           const SizedBox(height: 4),
-          Text(
+          DiaryText(
             dateStr,
+            key: ValueKey('date_$dateStr'),
+            delay: const Duration(milliseconds: 750),
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurface,
               fontSize: 22,
@@ -280,19 +324,63 @@ class _HomePageState extends ConsumerState<HomePage> {
             ),
           ),
           const SizedBox(height: 10),
-          Container(
-            width: 32,
-            height: 2,
-            decoration: BoxDecoration(
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurfaceVariant
-                  .withValues(alpha: 0.25),
-              borderRadius: BorderRadius.circular(1),
+          _FadeInDivider(
+            delay: const Duration(milliseconds: 1500),
+            child: Container(
+              width: 32,
+              height: 2,
+              decoration: BoxDecoration(
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurfaceVariant
+                    .withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(1),
+              ),
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Fade-in helper — reveals its child with a soft opacity animation after a delay.
+// ──────────────────────────────────────────────────────────────────────────────
+class _FadeInDivider extends StatefulWidget {
+  final Widget child;
+  final Duration delay;
+
+  const _FadeInDivider({required this.child, required this.delay});
+
+  @override
+  State<_FadeInDivider> createState() => _FadeInDividerState();
+}
+
+class _FadeInDividerState extends State<_FadeInDivider>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
+    Future.delayed(widget.delay, () {
+      if (mounted) _ctrl.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(opacity: _ctrl, child: widget.child);
   }
 }

@@ -12,6 +12,9 @@ class ConversationState {
   final MusicCard? currentCard;
   final String? errorMessage;
 
+  /// Whether the user has ever tapped the compose FAB to expand the input.
+  final bool hasExpandedInput;
+
   const ConversationState({
     this.status = ConvStatus.idle,
     this.userMessages = const [],
@@ -19,6 +22,7 @@ class ConversationState {
     this.progress,
     this.currentCard,
     this.errorMessage,
+    this.hasExpandedInput = false,
   });
 
   ConversationState copyWith({
@@ -32,6 +36,7 @@ class ConversationState {
     bool clearProgress = false,
     bool clearCard = false,
     bool clearError = false,
+    bool? hasExpandedInput,
   }) {
     return ConversationState(
       status: status ?? this.status,
@@ -40,6 +45,7 @@ class ConversationState {
       progress: clearProgress ? null : (progress ?? this.progress),
       currentCard: clearCard ? null : (currentCard ?? this.currentCard),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      hasExpandedInput: hasExpandedInput ?? this.hasExpandedInput,
     );
   }
 }

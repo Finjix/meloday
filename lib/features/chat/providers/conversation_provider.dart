@@ -84,6 +84,13 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
     );
   }
 
+  /// Called when the user first taps the compose FAB.
+  void markInputExpanded() {
+    if (!state.hasExpandedInput) {
+      state = state.copyWith(hasExpandedInput: true);
+    }
+  }
+
   Future<void> sendMessage(String content) async {
     // Guard against re-entrancy during generation
     if (state.status == ConvStatus.generating) return;

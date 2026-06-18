@@ -121,6 +121,12 @@ class _AppShellState extends ConsumerState<AppShell>
   void _handleFabTap() {
     if (!_isInputExpanded) {
       _toggleInput();
+      // Delay the date header reveal by 1 second after the FAB is tapped.
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) {
+          ref.read(conversationProvider.notifier).markInputExpanded();
+        }
+      });
     } else if (_textController.text.trim().isNotEmpty) {
       _sendMessage();
     } else {
