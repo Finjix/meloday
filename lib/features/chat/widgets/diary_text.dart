@@ -38,9 +38,15 @@ class _DiaryTextState extends State<DiaryText>
   @override
   void initState() {
     super.initState();
+    // Compute duration upfront (character-based) so the animation starts
+    // with the correct speed — no mid-animation duration change needed.
+    final dur = widget.durationOverride ??
+        Duration(
+          milliseconds:
+              (widget.text.length * 150 + 300).clamp(800, 30_000),
+        );
     _controller = AnimationController(
-      duration: widget.durationOverride ??
-          const Duration(milliseconds: 2000),
+      duration: dur,
       vsync: this,
     )..addStatusListener((s) {
         if (s == AnimationStatus.completed) widget.onComplete?.call();
@@ -109,9 +115,6 @@ class _DiaryTextState extends State<DiaryText>
           _lastWidth = w;
           _lines = _splitLines(
               widget.text, w, widget.style.fontSize ?? 17);
-
-          final ms = (_lines.length * 650 + 150).clamp(200, 60_000);
-          _controller.duration = Duration(milliseconds: ms);
         }
 
         return AnimatedBuilder(
@@ -121,23 +124,37 @@ class _DiaryTextState extends State<DiaryText>
             final n = _lines.length;
             if (n == 0) return const SizedBox.shrink();
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: List.generate(n, (i) {
-                final lineStart = i / n;
-                final lineEnd = (i + 1) / n;
-                double p;
-                if (t < lineStart) {
-                  p = 0;
-                } else if (t >= lineEnd) {
-                  p = 1;
-                } else {
-                  p = (t - lineStart) / (lineEnd - lineStart);
-                }
-                p = Curves.easeOut.transform(p);
+            // Only include lines that have started their reveal.
+            // Lines that haven't started yet are omitted from the tree,
+            // so the Column height grows as each new line appears.
+            final visible = <Widget>[];
+            for (int i = 0; i < n; i++) {
+              final lineStart = i / n;
+              final lineEnd = (i + 1) / n;
 
-                return ClipRect(
+              if (t < lineStart) {
+                // Not yet started — stop here; future lines add no height.
+                break;
+              }
+
+              double p;
+              if (t >= lineEnd) {
+                p = 1.0;
+              } else {
+                p = (t - lineStart) / (lineEnd - lineStart);
+              }
+              p = Curves.easeOut.transform(p);
+
+              if (p >= 1.0) {
+                // Fully revealed — show the full line without clipping.
+                visible.add(Text(
+                  _lines[i],
+                  style: widget.style,
+                  maxLines: 1,
+                ));
+              } else {
+                // In progress — clip from left using widthFactor.
+                visible.add(ClipRect(
                   child: Align(
                     alignment: Alignment.centerLeft,
                     widthFactor: p.clamp(0.0, 1.0),
@@ -147,8 +164,14 @@ class _DiaryTextState extends State<DiaryText>
                       maxLines: 1,
                     ),
                   ),
-                );
-              }),
+                ));
+              }
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: visible,
             );
           },
         );

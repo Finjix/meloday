@@ -53,13 +53,32 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   void _scrollToBottom() {
-    if (_scrollController.hasClients) {
+    if (!_scrollController.hasClients) return;
+    // Wait for the first line to start revealing before scrolling,
+    // then gently nudge toward the current bottom.  Because the
+    // DiaryText container grows line-by-line, the "bottom" shifts
+    // as new lines appear — repeating once keeps us in view.
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (!_scrollController.hasClients) return;
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
+        duration: const Duration(milliseconds: 1200),
+        curve: Curves.easeInOut,
+      ).then((_) {
+        // One more gentle nudge after the text has grown further.
+        if (!_scrollController.hasClients) return;
+        Future.delayed(const Duration(milliseconds: 600), () {
+          if (!_scrollController.hasClients) return;
+          final max = _scrollController.position.maxScrollExtent;
+          if ((_scrollController.offset - max).abs() < 10) return;
+          _scrollController.animateTo(
+            max,
+            duration: const Duration(milliseconds: 1000),
+            curve: Curves.easeOut,
+          );
+        });
+      });
+    });
   }
 
   void _handleRetry() {
