@@ -74,20 +74,27 @@ class _HomePageState extends ConsumerState<HomePage> {
         ? (lastMsg.content.length * 250 + 300).clamp(800, 300_000)
         : 2000;
 
-    _followTimer = Timer.periodic(
+    final timer = Timer.periodic(
       const Duration(milliseconds: 200),
       (_) => _nudgeTowardBottom(),
     );
+    _followTimer = timer;
 
     // Auto-cancel after the text animation should be done (+ buffer).
     Future.delayed(Duration(milliseconds: estDurationMs + 1500), () {
-      _followTimer?.cancel();
+      // Guard against stale cancellations: only cancel if the timer we
+      // scheduled against is still the active one.
+      if (_followTimer == timer) {
+        _followTimer?.cancel();
+        _followTimer = null;
+      }
     });
   }
 
   void _nudgeTowardBottom() {
     if (!_scrollController.hasClients) {
       _followTimer?.cancel();
+      _followTimer = null;
       return;
     }
     final pos = _scrollController.position;
@@ -97,6 +104,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     // We've reached the bottom — done following.
     if (pos.pixels >= maxExtent - 4) {
       _followTimer?.cancel();
+      _followTimer = null;
       return;
     }
     _scrollController.animateTo(
@@ -229,14 +237,6 @@ class _HomePageState extends ConsumerState<HomePage> {
           : DateTime.now();
     }
     final headerTimestamp = _headerTimestamp ?? DateTime.now();
-
-    // Debug: log header key stability
-    final debugDateStr =
-        '${headerTimestamp.month}月${headerTimestamp.day}日';
-    debugPrint('Meloday: build showDiary=$showDiary '
-        'msgs=${state.userMessages.length} '
-        'status=${state.status.name} '
-        'headerKey=header_$debugDateStr');
 
     return Scaffold(
       body: SafeArea(
@@ -412,28 +412,6 @@ class _DiaryHeader extends StatefulWidget {
 class _DiaryHeaderState extends State<_DiaryHeader> {
   bool _showDate = false;
   bool _showDivider = false;
-
-  @override
-  void initState() {
-    super.initState();
-    debugPrint('Meloday: _DiaryHeaderState.initState '
-        'key=${widget.key} weekday=${widget.weekday}');
-  }
-
-  @override
-  void dispose() {
-    debugPrint('Meloday: _DiaryHeaderState.dispose '
-        'key=${widget.key} weekday=${widget.weekday}');
-    super.dispose();
-  }
-
-  @override
-  void didUpdateWidget(covariant _DiaryHeader oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    debugPrint('Meloday: _DiaryHeaderState.didUpdateWidget '
-        'oldKey=${oldWidget.key} newKey=${widget.key} '
-        'oldWeekday=${oldWidget.weekday} newWeekday=${widget.weekday}');
-  }
 
   @override
   Widget build(BuildContext context) {

@@ -119,9 +119,6 @@ class _AppShellState extends ConsumerState<AppShell>
   }
 
   void _handleFabTap() {
-    debugPrint('Meloday: _handleFabTap — '
-        'isExpanded=$_isInputExpanded '
-        'hasText=${_textController.text.trim().isNotEmpty}');
     if (!_isInputExpanded) {
       _toggleInput();
       ref.read(conversationProvider.notifier).markInputExpanded();
