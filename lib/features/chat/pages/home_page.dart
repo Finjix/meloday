@@ -22,6 +22,11 @@ class HomePage extends ConsumerStatefulWidget {
 class _HomePageState extends ConsumerState<HomePage> {
   final _scrollController = ScrollController();
 
+  /// Stable timestamp for the diary header, set once when the diary area
+  /// first appears. Prevents the header key from changing (and thus the
+  /// header from being recreated) when the first message is sent.
+  DateTime? _headerTimestamp;
+
   static const _weekDays = [
     '星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'
   ];
@@ -29,10 +34,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// Number of leading non-message items in the ListView
   /// (spacer at index 0, diary header at index 1).
   static const _leadingItemCount = 2;
-
-  /// Header animation time: weekday (400) + date (500) + divider (300)
-  /// ≈ 1500 ms with buffer.
-  static const int _headerAnimMs = 1500;
 
   @override
   void initState() {
@@ -65,21 +66,13 @@ class _HomePageState extends ConsumerState<HomePage> {
     ref.read(conversationProvider.notifier).retryFromError();
   }
 
-  /// Estimate how long a message's reveal animation will take (ms).
-  int _estMessageMs(String text) {
-    // Rough estimate: ~20 CJK chars or ~30 Latin chars per line.
-    final estimatedLines = (text.length / 20).ceil().clamp(1, 100);
-    return estimatedLines * 650 + 150;
-  }
-
-  /// Cumulative delay for a message at [msgIndex], so each message starts
-  /// only after every previous one has finished.
+  /// Each message starts its reveal animation immediately when it is added
+  /// to the list. We no longer sequence messages cumulatively because
+  /// previous messages have already finished animating by the time a new
+  /// message is sent — the cumulative delay caused new messages to remain
+  /// invisible for seconds.
   Duration _msgDelay(List<ChatMessage> messages, int msgIndex) {
-    int total = _headerAnimMs;
-    for (int i = 0; i < msgIndex; i++) {
-      total += _estMessageMs(messages[i].content);
-    }
-    return Duration(milliseconds: total);
+    return Duration.zero;
   }
 
   Widget _buildAgentArea(ConversationState state) {
@@ -183,12 +176,23 @@ class _HomePageState extends ConsumerState<HomePage> {
     final showDiary = state.hasExpandedInput;
     final agentArea = _buildAgentArea(state);
 
-    // Timestamp for the diary header — uses the first message's time,
-    // or falls back to now when no messages have been sent yet.
-    final headerTimestamp =
-        state.userMessages.isNotEmpty
-            ? state.userMessages.first.timestamp
-            : DateTime.now();
+    // Use a stable timestamp for the diary header. Once set (when the diary
+    // area first appears), it never changes — preventing the _DiaryHeader
+    // widget key from shifting and destroying the animation state.
+    if (showDiary && _headerTimestamp == null) {
+      _headerTimestamp = state.userMessages.isNotEmpty
+          ? state.userMessages.first.timestamp
+          : DateTime.now();
+    }
+    final headerTimestamp = _headerTimestamp ?? DateTime.now();
+
+    // Debug: log header key stability
+    final debugDateStr =
+        '${headerTimestamp.month}月${headerTimestamp.day}日';
+    debugPrint('Meloday: build showDiary=$showDiary '
+        'msgs=${state.userMessages.length} '
+        'status=${state.status.name} '
+        'headerKey=header_$debugDateStr');
 
     return Scaffold(
       body: SafeArea(
@@ -364,6 +368,28 @@ class _DiaryHeader extends StatefulWidget {
 class _DiaryHeaderState extends State<_DiaryHeader> {
   bool _showDate = false;
   bool _showDivider = false;
+
+  @override
+  void initState() {
+    super.initState();
+    debugPrint('Meloday: _DiaryHeaderState.initState '
+        'key=${widget.key} weekday=${widget.weekday}');
+  }
+
+  @override
+  void dispose() {
+    debugPrint('Meloday: _DiaryHeaderState.dispose '
+        'key=${widget.key} weekday=${widget.weekday}');
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DiaryHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    debugPrint('Meloday: _DiaryHeaderState.didUpdateWidget '
+        'oldKey=${oldWidget.key} newKey=${widget.key} '
+        'oldWeekday=${oldWidget.weekday} newWeekday=${widget.weekday}');
+  }
 
   @override
   Widget build(BuildContext context) {

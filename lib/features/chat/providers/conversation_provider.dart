@@ -102,10 +102,19 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
       timestamp: DateTime.now(),
     );
 
+    debugPrint('Meloday: sendMessage start — '
+        'status=${state.status.name} '
+        'hasExpandedInput=${state.hasExpandedInput} '
+        'msgCount=${state.userMessages.length + 1}');
+
     state = state.copyWith(
       status: ConvStatus.chatting,
       userMessages: [...state.userMessages, userMsg],
     );
+
+    debugPrint('Meloday: sendMessage state updated (sync) — '
+        'newStatus=${state.status.name} '
+        'hasExpandedInput=${state.hasExpandedInput}');
 
     // Simulate agent thinking delay
     await Future.delayed(const Duration(milliseconds: 400));

@@ -46,7 +46,7 @@ class _DiaryTextState extends State<DiaryText>
         if (s == AnimationStatus.completed) widget.onComplete?.call();
       });
 
-    if (widget.delay != null) {
+    if (widget.delay != null && widget.delay != Duration.zero) {
       Future.delayed(widget.delay!, () {
         if (mounted) _controller.forward();
       });
