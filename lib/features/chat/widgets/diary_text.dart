@@ -43,7 +43,7 @@ class _DiaryTextState extends State<DiaryText>
     final dur = widget.durationOverride ??
         Duration(
           milliseconds:
-              (widget.text.length * 150 + 300).clamp(800, 30_000),
+              (widget.text.length * 250 + 300).clamp(800, 300_000),
         );
     _controller = AnimationController(
       duration: dur,
@@ -124,13 +124,29 @@ class _DiaryTextState extends State<DiaryText>
             final n = _lines.length;
             if (n == 0) return const SizedBox.shrink();
 
+            // Weight each line by its character count so short / empty
+            // lines don't stall the animation (equal-time-per-line
+            // makes a blank line wait as long as a full one).
+            // Empty lines count as 1 virtual character.
+            final totalChars = _lines.fold<int>(
+              0,
+              (sum, line) => sum + line.length.clamp(1, 999),
+            );
+            // Cumulative start positions for each line [0.0 … 1.0).
+            double cum = 0;
+            final starts = <double>[];
+            for (final line in _lines) {
+              starts.add(cum / totalChars);
+              cum += line.length.clamp(1, 999);
+            }
+
             // Only include lines that have started their reveal.
             // Lines that haven't started yet are omitted from the tree,
             // so the Column height grows as each new line appears.
             final visible = <Widget>[];
             for (int i = 0; i < n; i++) {
-              final lineStart = i / n;
-              final lineEnd = (i + 1) / n;
+              final lineStart = starts[i];
+              final lineEnd = i + 1 < n ? starts[i + 1] : 1.0;
 
               if (t < lineStart) {
                 // Not yet started — stop here; future lines add no height.

@@ -1,4 +1,5 @@
 // lib/features/chat/pages/home_page.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,6 +22,11 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage> {
   final _scrollController = ScrollController();
+
+  /// Periodic timer that gently nudges the viewport toward the bottom as
+  /// new text lines are revealed, then cancels itself once the bottom is
+  /// reached.
+  Timer? _followTimer;
 
   /// Stable timestamp for the diary header, set once when the diary area
   /// first appears. Prevents the header key from changing (and thus the
@@ -48,37 +54,56 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   void dispose() {
+    _followTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _scrollToBottom() {
-    if (!_scrollController.hasClients) return;
-    // Wait for the first line to start revealing before scrolling,
-    // then gently nudge toward the current bottom.  Because the
-    // DiaryText container grows line-by-line, the "bottom" shifts
-    // as new lines appear — repeating once keeps us in view.
-    Future.delayed(const Duration(milliseconds: 800), () {
-      if (!_scrollController.hasClients) return;
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 1200),
-        curve: Curves.easeInOut,
-      ).then((_) {
-        // One more gentle nudge after the text has grown further.
-        if (!_scrollController.hasClients) return;
-        Future.delayed(const Duration(milliseconds: 600), () {
-          if (!_scrollController.hasClients) return;
-          final max = _scrollController.position.maxScrollExtent;
-          if ((_scrollController.offset - max).abs() < 10) return;
-          _scrollController.animateTo(
-            max,
-            duration: const Duration(milliseconds: 1000),
-            curve: Curves.easeOut,
-          );
-        });
-      });
+  /// Starts a periodic timer that gently nudges the viewport toward the
+  /// current bottom as text lines are revealed.  The timer runs until the
+  /// content stops growing AND we've reached the bottom.
+  void _startFollowingBottom() {
+    _followTimer?.cancel();
+
+    // Estimate when the last message's reveal animation will finish so we
+    // can auto-cancel even if the content never overflows.
+    final state = ref.read(conversationProvider);
+    final lastMsg =
+        state.userMessages.isNotEmpty ? state.userMessages.last : null;
+    final estDurationMs = lastMsg != null
+        ? (lastMsg.content.length * 250 + 300).clamp(800, 300_000)
+        : 2000;
+
+    _followTimer = Timer.periodic(
+      const Duration(milliseconds: 200),
+      (_) => _nudgeTowardBottom(),
+    );
+
+    // Auto-cancel after the text animation should be done (+ buffer).
+    Future.delayed(Duration(milliseconds: estDurationMs + 1500), () {
+      _followTimer?.cancel();
     });
+  }
+
+  void _nudgeTowardBottom() {
+    if (!_scrollController.hasClients) {
+      _followTimer?.cancel();
+      return;
+    }
+    final pos = _scrollController.position;
+    final maxExtent = pos.maxScrollExtent;
+    // Content doesn't overflow yet — keep waiting, it's still growing.
+    if (maxExtent <= 0) return;
+    // We've reached the bottom — done following.
+    if (pos.pixels >= maxExtent - 4) {
+      _followTimer?.cancel();
+      return;
+    }
+    _scrollController.animateTo(
+      maxExtent,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOut,
+    );
   }
 
   void _handleRetry() {
@@ -182,7 +207,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       final prevLen = prev?.userMessages.length ?? 0;
       if (next.userMessages.length > prevLen) {
         WidgetsBinding.instance
-            .addPostFrameCallback((_) => _scrollToBottom());
+            .addPostFrameCallback((_) => _startFollowingBottom());
       }
     });
 
@@ -235,7 +260,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ),
                   child: ListView.builder(
                     controller: _scrollController,
-                    padding: EdgeInsets.zero,
+                    padding: const EdgeInsets.only(bottom: 144),
                     itemCount:
                         state.userMessages.length + _leadingItemCount,
                     itemBuilder: (context, index) {
