@@ -22,6 +22,23 @@ class DiaryText extends StatefulWidget {
     this.onComplete,
   });
 
+  /// Per-character reveal rate used by the default duration. Exposed so
+  /// callers (e.g. the conversation state machine) can time other UI
+  /// events off the same animation without duplicating the formula.
+  static const int perCharMs = 30;
+
+  /// Returns the duration the widget will use to reveal [text] under
+  /// its default per-character rate. Useful for sequencing: the agent
+  /// reply can wait for `DiaryText.estimateDuration(userText) + thinking`
+  /// before showing, so the user's text finishes revealing first.
+  static Duration estimateDuration(String text) {
+    final visibleChars =
+        text.length - '\n'.allMatches(text).length;
+    return Duration(
+      milliseconds: (visibleChars * perCharMs).clamp(100, 30_000),
+    );
+  }
+
   @override
   State<DiaryText> createState() => _DiaryTextState();
 }
@@ -37,25 +54,7 @@ class _DiaryTextState extends State<DiaryText>
   @override
   void initState() {
     super.initState();
-    // Per-character reveal time is constant so the sweep speed is
-    // identical regardless of text length.
-    //
-    // Duration is based on visible chars (text length minus newlines),
-    // not raw text length. The previous formula used text.length which
-    // includes \n, so text with newlines had a lower per-char time
-    // than text without — the user saw "short text slow, long text fast".
-    //
-    // Build computes totalChars as the sum of line.length (empty lines
-    // contribute 0). For text without newlines, text.length == totalChars
-    // so per-char is exact. For text with newlines, text.length - newlines
-    // == totalChars, so per-char is still exact.
-    const perCharMs = 30;
-    final visibleChars =
-        widget.text.length - '\n'.allMatches(widget.text).length;
-    final dur = widget.durationOverride ??
-        Duration(
-          milliseconds: (visibleChars * perCharMs).clamp(100, 30_000),
-        );
+    final dur = widget.durationOverride ?? DiaryText.estimateDuration(widget.text);
     _controller = AnimationController(
       duration: dur,
       vsync: this,

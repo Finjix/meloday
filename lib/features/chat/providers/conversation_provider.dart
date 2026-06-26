@@ -16,6 +16,7 @@ import '../../../services/mock_image_service.dart';
 import '../../../services/storage_service.dart';
 import '../../../main.dart';
 import '../../diary/providers/diary_list_provider.dart';
+import '../widgets/diary_text.dart';
 
 final mockAgentServiceProvider = Provider<MockAgentService>((ref) {
   return MockAgentService();
@@ -107,8 +108,14 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
       userMessages: [...state.userMessages, userMsg],
     );
 
-    // Simulate agent thinking delay
-    await Future.delayed(const Duration(milliseconds: 400));
+    // Wait for the user's text to finish its line-by-line reveal, then
+    // a short "agent thinking" beat before showing the reply. Using
+    // DiaryText.estimateDuration keeps this in lockstep with the
+    // actual per-character sweep used by the widget.
+    await Future.delayed(
+      DiaryText.estimateDuration(content) +
+          const Duration(milliseconds: 400),
+    );
 
     // Guard against state mutation after dispose
     if (!_active) return;
