@@ -3,10 +3,9 @@ import 'package:flutter/material.dart';
 
 /// Reveals text line by line, sweeping each line from left to right.
 ///
-/// Paragraphs separated by `\n` are further split into visual lines based on
-/// the actual container width (estimated via CJK character width).
-///
-/// The animation plays once. Use [key] so each message keeps its own state.
+/// Per-character reveal time is constant, so the sweep speed (width
+/// per second) is the same regardless of text length. The animation
+/// plays once. Use [key] so each message keeps its own state.
 class DiaryText extends StatefulWidget {
   final String text;
   final TextStyle style;
@@ -38,12 +37,24 @@ class _DiaryTextState extends State<DiaryText>
   @override
   void initState() {
     super.initState();
-    // Compute duration upfront (character-based) so the animation starts
-    // with the correct speed — no mid-animation duration change needed.
+    // Per-character reveal time is constant so the sweep speed is
+    // identical regardless of text length.
+    //
+    // Duration is based on visible chars (text length minus newlines),
+    // not raw text length. The previous formula used text.length which
+    // includes \n, so text with newlines had a lower per-char time
+    // than text without — the user saw "short text slow, long text fast".
+    //
+    // Build computes totalChars as the sum of line.length (empty lines
+    // contribute 0). For text without newlines, text.length == totalChars
+    // so per-char is exact. For text with newlines, text.length - newlines
+    // == totalChars, so per-char is still exact.
+    const perCharMs = 30;
+    final visibleChars =
+        widget.text.length - '\n'.allMatches(widget.text).length;
     final dur = widget.durationOverride ??
         Duration(
-          milliseconds:
-              (widget.text.length * 250 + 300).clamp(800, 300_000),
+          milliseconds: (visibleChars * perCharMs).clamp(100, 30_000),
         );
     _controller = AnimationController(
       duration: dur,
@@ -103,15 +114,7 @@ class _DiaryTextState extends State<DiaryText>
       builder: (context, constraints) {
         final w = constraints.maxWidth;
 
-        // Re-split only when the container width changes, unless duration is
-        // overridden (then we still need to split lines for rendering).
-        if (widget.durationOverride != null) {
-          if (w != _lastWidth && w > 0 && w.isFinite) {
-            _lastWidth = w;
-            _lines = _splitLines(
-                widget.text, w, widget.style.fontSize ?? 17);
-          }
-        } else if (w != _lastWidth && w > 0 && w.isFinite) {
+        if (w != _lastWidth && w > 0 && w.isFinite) {
           _lastWidth = w;
           _lines = _splitLines(
               widget.text, w, widget.style.fontSize ?? 17);
@@ -124,20 +127,30 @@ class _DiaryTextState extends State<DiaryText>
             final n = _lines.length;
             if (n == 0) return const SizedBox.shrink();
 
-            // Weight each line by its character count so short / empty
-            // lines don't stall the animation (equal-time-per-line
-            // makes a blank line wait as long as a full one).
-            // Empty lines count as 1 virtual character.
+            // Empty lines contribute 0 to totalChars — they take 0
+            // animation time and appear at the moment the previous
+            // non-empty line finishes. This keeps per-char time exact.
             final totalChars = _lines.fold<int>(
               0,
-              (sum, line) => sum + line.length.clamp(1, 999),
+              (sum, line) => sum + line.length,
             );
+            if (totalChars == 0) {
+              // All lines empty — render the column as-is.
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: _lines
+                    .map((l) => Text(l, style: widget.style, maxLines: 1))
+                    .toList(),
+              );
+            }
+
             // Cumulative start positions for each line [0.0 … 1.0).
             double cum = 0;
             final starts = <double>[];
             for (final line in _lines) {
               starts.add(cum / totalChars);
-              cum += line.length.clamp(1, 999);
+              cum += line.length;
             }
 
             // Only include lines that have started their reveal.

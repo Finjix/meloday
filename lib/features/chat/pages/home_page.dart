@@ -70,8 +70,13 @@ class _HomePageState extends ConsumerState<HomePage> {
     final state = ref.read(conversationProvider);
     final lastMsg =
         state.userMessages.isNotEmpty ? state.userMessages.last : null;
+    // DiaryText reveals at a constant 30ms/char based on visible chars
+    // (text length minus newlines). Mirror that formula here.
     final estDurationMs = lastMsg != null
-        ? (lastMsg.content.length * 250 + 300).clamp(800, 300_000)
+        ? ((lastMsg.content.length -
+                    '\n'.allMatches(lastMsg.content).length) *
+                30)
+            .clamp(100, 30_000)
         : 2000;
 
     final timer = Timer.periodic(
