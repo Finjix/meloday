@@ -10,6 +10,12 @@ class AgentHeader extends StatefulWidget {
 
   const AgentHeader({super.key, this.message});
 
+  /// Per-phase fade duration for the bubble swap (fade out + fade in
+  /// together = 2 × this). Exposed so sibling widgets (e.g. the
+  /// generating-progress panel) can wait for the agent's text reveal
+  /// to finish before staging their own entrance.
+  static const Duration fadeDuration = Duration(milliseconds: 400);
+
   @override
   State<AgentHeader> createState() => _AgentHeaderState();
 }

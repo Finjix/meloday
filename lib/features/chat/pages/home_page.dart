@@ -147,9 +147,29 @@ class _HomePageState extends ConsumerState<HomePage> {
             if (state.agentMessage != null)
               AgentHeader(message: state.agentMessage),
             if (state.progress != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: GeneratingProgressWidget(progress: state.progress!),
+              // The progress panel sits inside a 0-height SizedBox +
+              // OverflowBox so the Column's measured height stays at
+              // the agent header's height. The panel itself overflows
+              // downward and is painted via the outer Stack's
+              // Positioned overlay, which renders after the ListView
+              // → z-order puts it on top of the user messages
+              // ("置顶") without pushing them down.
+              SizedBox(
+                height: 0,
+                child: OverflowBox(
+                  minHeight: 0,
+                  maxHeight: double.infinity,
+                  alignment: Alignment.topLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: GeneratingProgressWidget(
+                      // Panel slides in only after the agent's
+                      // line-by-line reveal of this message finishes
+                      // — see widget's initState.
+                      agentText: state.agentMessage?.content,
+                    ),
+                  ),
+                ),
               ),
           ],
         );
