@@ -6,15 +6,23 @@ import '../../../core/glass_config.dart';
 import 'agent_header.dart';
 import 'diary_text.dart';
 
+/// Two states the bottom-area status pill can be in:
+/// - [generating]: spinner + "正在为您创作~" while the agent builds
+///   the music card.
+/// - [ready]: "创作完成，点击查看！" tappable prompt. The parent
+///   listens for the tap and shows the centered card-reveal scene.
+enum GeneratingStatus { generating, ready }
+
 class GeneratingProgressWidget extends StatefulWidget {
-  /// The agent's message text whose line-by-line reveal should finish
-  /// before this widget starts sliding in. If null, slides in
-  /// immediately.
+  final GeneratingStatus status;
   final String? agentText;
+  final VoidCallback? onTap;
 
   const GeneratingProgressWidget({
     super.key,
+    this.status = GeneratingStatus.generating,
     this.agentText,
+    this.onTap,
   });
 
   @override
@@ -76,35 +84,72 @@ class _GeneratingProgressWidgetState extends State<GeneratingProgressWidget>
       position: _slideAnim,
       child: FadeTransition(
         opacity: _fadeAnim,
-        child: GlassContainer(
-          shape: const LiquidRoundedSuperellipse(borderRadius: 16),
-          settings: GlassConfig.card,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                '正在为您创作~',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface,
-                  fontSize: 14,
-                ),
-              ),
-            ],
+        // GestureDetector wraps the whole glass pill so the entire
+        // pill is tappable, not just the text inside.
+        child: GestureDetector(
+          onTap: widget.status == GeneratingStatus.ready ? widget.onTap : null,
+          behavior: HitTestBehavior.opaque,
+          child: GlassContainer(
+            shape: const LiquidRoundedSuperellipse(borderRadius: 16),
+            settings: GlassConfig.card,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: switch (widget.status) {
+              GeneratingStatus.generating => _buildGeneratingContent(context),
+              GeneratingStatus.ready => _buildReadyContent(context),
+            },
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildGeneratingContent(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.5,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          '正在为您创作~',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface,
+            fontSize: 14,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReadyContent(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '创作完成，点击查看！',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Icon(
+          Icons.arrow_forward_rounded,
+          size: 16,
+          color: primary,
+        ),
+      ],
     );
   }
 }

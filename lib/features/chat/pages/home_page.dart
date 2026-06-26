@@ -9,7 +9,6 @@ import '../providers/conversation_provider.dart';
 import '../widgets/agent_header.dart';
 import '../widgets/generating_progress.dart';
 import '../widgets/diary_text.dart';
-import '../../card/widgets/music_card_compact.dart';
 import '../../../core/glass_config.dart';
 import '../../../core/theme.dart';
 
@@ -174,24 +173,29 @@ class _HomePageState extends ConsumerState<HomePage> {
           ],
         );
       case ConvStatus.cardReady:
+        // The card itself is rendered centered in the outer Stack
+        // (see build() / app.dart's CardReadyScene) — only the
+        // agent's follow-up message lives in the top overlay, plus
+        // the "创作完成，点击查看！" prompt that opens the scene.
         return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (state.currentCard != null)
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                child: MusicCardCompact(
-                  card: state.currentCard!,
-                  onTap: () => Navigator.of(context).pushNamed(
-                    '/card',
-                    arguments: state.currentCard!.id,
-                  ),
-                ),
-              ),
             if (state.agentMessage != null)
               AgentHeader(message: state.agentMessage),
+            if (state.currentCard != null)
+              // The "创作完成，点击查看！" prompt — separate from
+              // the agent's bubble. Tap → cardSceneVisibleProvider
+              // → AppShell renders CardReadyScene.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: GeneratingProgressWidget(
+                  status: GeneratingStatus.ready,
+                  onTap: () => ref
+                      .read(cardSceneVisibleProvider.notifier)
+                      .state = true,
+                ),
+              ),
           ],
         );
       case ConvStatus.error:

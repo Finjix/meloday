@@ -9,6 +9,7 @@ import 'features/chat/widgets/chat_input.dart';
 import 'models/conversation_state.dart';
 import 'features/diary/pages/diary_page.dart';
 import 'features/profile/pages/profile_page.dart';
+import 'features/card/widgets/card_ready_scene.dart';
 
 /// Root app shell with a glass bottom navigation bar.
 class AppShell extends ConsumerStatefulWidget {
@@ -162,6 +163,22 @@ class _AppShellState extends ConsumerState<AppShell>
     final showBar =
         !_isInputExpanded || !_slideController.isCompleted;
 
+    // Watch the conversation so the centered card reveal (with its
+    // blurred scrim) can be rendered above EVERYTHING — including
+    // the bottom nav bar and the bottom gradient fade — when the
+    // user taps the "创作完成，点击查看！" prompt in the chat area.
+    final conversationState = ref.watch(conversationProvider);
+    // The scene is shown only when both conditions hold: the
+    // conversation is in cardReady (i.e. a card exists) AND the
+    // user has tapped the prompt to open it. Tapping the scrim
+    // flips the second flag back to false without disturbing the
+    // cardReady status, so the prompt stays available for a
+    // re-tap.
+    final cardSceneVisible = ref.watch(cardSceneVisibleProvider);
+    final showCardScene = conversationState.status == ConvStatus.cardReady &&
+        conversationState.currentCard != null &&
+        cardSceneVisible;
+
     // Adaptive bottom fade: nav bar total height + extra fade zone
     final safeBottom = MediaQuery.of(context).padding.bottom;
     final barTotalHeight =
@@ -312,6 +329,28 @@ class _AppShellState extends ConsumerState<AppShell>
             },
             child: _buildNavPill(),
           ),
+
+          // ── Square music card + blurred scrim — rendered LAST
+          //    so it sits on top of page content, gradient fades,
+          //    AND the bottom nav bar. The BackdropFilter samples
+          //    everything below it, so the bar gets blurred too.
+          //    Tapping the scrim (outside the card) reverses the
+          //    animation and clears the visibility flag, returning
+          //    to the "创作完成，点击查看！" prompt without losing
+          //    the generated card.
+          if (showCardScene)
+            Positioned.fill(
+              child: CardReadyScene(
+                card: conversationState.currentCard!,
+                onTap: () => Navigator.of(context).pushNamed(
+                  '/card',
+                  arguments: conversationState.currentCard!.id,
+                ),
+                onDismiss: () => ref
+                    .read(cardSceneVisibleProvider.notifier)
+                    .state = false,
+              ),
+            ),
         ],
       ),
     );

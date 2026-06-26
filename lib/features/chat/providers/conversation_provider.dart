@@ -41,6 +41,12 @@ final conversationProvider =
   );
 });
 
+/// Whether the centered card-reveal scene (CardReadyScene) is currently
+/// shown. Independent of the conversation's [ConvStatus.cardReady] so
+/// the user can dismiss the scene and re-open it by tapping the
+/// "创作完成，点击查看！" prompt without losing the generated card.
+final cardSceneVisibleProvider = StateProvider<bool>((ref) => false);
+
 class ConversationNotifier extends StateNotifier<ConversationState> {
   final MockAgentService _agentService;
   final MockMusicService _musicService;
