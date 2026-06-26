@@ -10,11 +10,11 @@ class AgentHeader extends StatefulWidget {
 
   const AgentHeader({super.key, this.message});
 
-  /// Per-phase fade duration for the bubble swap (fade out + fade in
-  /// together = 2 × this). Exposed so sibling widgets (e.g. the
+  /// Duration of a single fade phase (fade out OR fade in — not both).
+  /// The full swap is 2 × this. Exposed so sibling widgets (e.g. the
   /// generating-progress panel) can wait for the agent's text reveal
   /// to finish before staging their own entrance.
-  static const Duration fadeDuration = Duration(milliseconds: 400);
+  static const Duration fadePhaseDuration = Duration(milliseconds: 400);
 
   @override
   State<AgentHeader> createState() => _AgentHeaderState();
@@ -33,7 +33,7 @@ class _AgentHeaderState extends State<AgentHeader>
     super.initState();
     _shown = widget.message;
     _ctrl = AnimationController(
-      duration: const Duration(milliseconds: 400),
+      duration: AgentHeader.fadePhaseDuration,
       vsync: this,
       // Start fully visible if we have a message, hidden otherwise.
       value: widget.message != null ? 1.0 : 0.0,
@@ -46,6 +46,12 @@ class _AgentHeaderState extends State<AgentHeader>
     final newId = widget.message?.id;
     final oldId = old.message?.id;
     if (newId == oldId) return;
+
+    // If a reverse is already in flight, don't restart it. The existing
+    // .then() callback reads widget.message fresh, so the LATEST message
+    // wins when the reverse completes — no need to attach a second
+    // .then() to the same future.
+    if (_ctrl.status == AnimationStatus.reverse) return;
 
     if (newId == null) {
       // Fade out, then clear _shown

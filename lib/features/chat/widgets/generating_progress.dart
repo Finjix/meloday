@@ -53,13 +53,13 @@ class _GeneratingProgressWidgetState extends State<GeneratingProgressWidget>
     ).animate(curve);
 
     // Wait for the agent's text to finish revealing before sliding in.
-    // Total wait = AgentHeader's fade-out (the swap happens at the
-    // midpoint) + DiaryText's line-by-line duration. Using the same
-    // estimateDuration the widget uses internally keeps the timing
-    // in lockstep — the panel starts moving exactly as the agent's
-    // last character finishes sweeping in.
+    // Total wait = one fade-out phase (swap happens at the END of the
+    // reverse, not the midpoint) + DiaryText's line-by-line duration.
+    // Using the same estimateDuration the widget uses internally keeps
+    // the timing in lockstep — the panel starts moving exactly as the
+    // agent's last character finishes sweeping in.
     final delay = widget.agentText != null
-        ? AgentHeader.fadeDuration +
+        ? AgentHeader.fadePhaseDuration +
             DiaryText.estimateDuration(widget.agentText!)
         : Duration.zero;
     if (delay <= Duration.zero) {
