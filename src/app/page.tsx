@@ -9,11 +9,11 @@ import {
   PenLine,
   RefreshCw,
   Save,
-  Send,
   Trash2,
+  UserRound,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { CoverArt } from "@/components/CoverArt";
 import {
@@ -34,6 +34,7 @@ import type { CardPayload, ChatMessage, DiaryEntry, GeneratedCard } from "@/lib/
 type AppView =
   | { name: "today" }
   | { name: "notebook" }
+  | { name: "mine" }
   | { name: "entry"; id: string }
   | { name: "draft-detail" };
 
@@ -64,7 +65,7 @@ function initialMessages() {
   return [
     createMessage(
       "agent",
-      "晚上好，我在。你可以像给朋友发消息一样，先讲讲今天最留在心里的事。",
+      "你好呀，有什么想和我说的！",
     ),
   ];
 }
@@ -98,6 +99,14 @@ function formatDateLabel(date: string) {
     day: "numeric",
     weekday: "short",
   }).format(new Date(`${date}T00:00:00+08:00`));
+}
+
+function formatWritingDate(date: Date) {
+  const weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+  return {
+    date: `${date.getMonth() + 1}月${date.getDate()}日`,
+    weekday: weekdays[date.getDay()],
+  };
 }
 
 function useEntryMedia(entry?: DiaryEntry) {
@@ -145,6 +154,8 @@ export default function Home() {
   const [view, setView] = useState<AppView>({ name: "today" });
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages());
   const [input, setInput] = useState("");
+  const [writtenParagraphs, setWrittenParagraphs] = useState<string[]>([]);
+  const [hasStartedWriting, setHasStartedWriting] = useState(false);
   const [isAgentBusy, setIsAgentBusy] = useState(false);
   const [generation, setGeneration] = useState<{
     running: boolean;
@@ -209,9 +220,14 @@ export default function Home() {
 
     const userMessage = createMessage("user", content);
     const assistantMessage = createMessage("agent", "");
-    const conversation = [...messages, userMessage];
+    const conversation = [
+      ...writtenParagraphs.map((paragraph) => createMessage("user", paragraph)),
+      userMessage,
+    ];
+    const nextWrittenParagraphCount = writtenParagraphs.length + 1;
 
     setInput("");
+    setWrittenParagraphs((current) => [...current, content]);
     setMessages([...conversation, assistantMessage]);
     setIsAgentBusy(true);
 
@@ -228,7 +244,7 @@ export default function Home() {
 
       setIsAgentBusy(false);
 
-      if (meta.action === "generate") {
+      if (meta.action === "generate" && nextWrittenParagraphCount >= 3) {
         await runGeneration(conversation);
       }
     } catch {
@@ -266,7 +282,10 @@ export default function Home() {
       draftVersions.forEach(disposeGeneratedCard);
       setDraftVersions([]);
       setDraftIndex(0);
+      setInput("");
       setMessages(initialMessages());
+      setWrittenParagraphs([]);
+      setHasStartedWriting(false);
       refreshEntries();
       setView({ name: "entry", id: entry.id });
     } finally {
@@ -279,7 +298,10 @@ export default function Home() {
     setDraftVersions([]);
     setDraftIndex(0);
     setDraftFeedback("");
+    setInput("");
     setMessages(initialMessages());
+    setWrittenParagraphs([]);
+    setHasStartedWriting(false);
     setGeneration(null);
     setView({ name: "today" });
   }
@@ -332,6 +354,9 @@ export default function Home() {
             <TodayView
               messages={messages}
               input={input}
+              writtenParagraphs={writtenParagraphs}
+              hasStartedWriting={hasStartedWriting}
+              startWriting={() => setHasStartedWriting(true)}
               setInput={setInput}
               submitMessage={submitMessage}
               isAgentBusy={isAgentBusy}
@@ -384,6 +409,8 @@ export default function Home() {
             />
           ) : null}
 
+          {view.name === "mine" ? <MineView /> : null}
+
           {view.name === "draft-detail" ? (
             <DraftDetailView
               draft={currentDraft}
@@ -395,12 +422,22 @@ export default function Home() {
         </div>
 
         <BottomNav
-          active={view.name === "today" || view.name === "draft-detail" ? "today" : "notebook"}
+          active={
+            view.name === "today" || view.name === "draft-detail"
+              ? "today"
+              : view.name === "mine"
+                ? "mine"
+                : "notebook"
+          }
           goToday={() => setView({ name: "today" })}
           goNotebook={() => {
             setPendingSavedVersion(null);
             refreshEntries();
             setView({ name: "notebook" });
+          }}
+          goMine={() => {
+            setPendingSavedVersion(null);
+            setView({ name: "mine" });
           }}
         />
       </div>
@@ -408,27 +445,17 @@ export default function Home() {
   );
 }
 
-function AppHeader({ right }: { right?: React.ReactNode }) {
-  return (
-    <header className="sticky top-0 z-10 border-b border-[#e1e8e1] bg-[#f8faf7]/92 px-5 py-4 backdrop-blur">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#d47d6a]">
-            音乐日记
-          </p>
-          <h1 className="mt-0.5 text-2xl font-semibold tracking-normal text-[#20302d]">
-            Meloday
-          </h1>
-        </div>
-        {right}
-      </div>
-    </header>
-  );
+function AppHeader(props: { right?: React.ReactNode }) {
+  void props;
+  return null;
 }
 
 function TodayView({
   messages,
   input,
+  writtenParagraphs,
+  hasStartedWriting,
+  startWriting,
   setInput,
   submitMessage,
   isAgentBusy,
@@ -449,6 +476,9 @@ function TodayView({
 }: {
   messages: ChatMessage[];
   input: string;
+  writtenParagraphs: string[];
+  hasStartedWriting: boolean;
+  startWriting: () => void;
   setInput: (value: string) => void;
   submitMessage: () => void;
   isAgentBusy: boolean;
@@ -467,6 +497,26 @@ function TodayView({
   openDraftDetail: () => void;
   resetToday: () => void;
 }) {
+  const latestAgentMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "agent");
+  const writingDate = formatWritingDate(new Date());
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const diaryFrameRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [input, writtenParagraphs.length, hasStartedWriting]);
+
+  useEffect(() => {
+    const frame = diaryFrameRef.current;
+    if (!frame) return;
+    frame.scrollTop = frame.scrollHeight;
+  }, [input, writtenParagraphs, hasStartedWriting]);
+
   if (generation) {
     return (
       <GenerationView
@@ -505,48 +555,72 @@ function TodayView({
           </div>
         }
       />
-      <section className="px-5 py-5">
-        <div className="space-y-4">
-          {messages.map((message) => (
-            <ChatBubble key={message.id} message={message} />
-          ))}
-          {isAgentBusy ? (
-            <div className="flex items-center gap-2 pl-1 text-sm text-[#68736f]">
-              <LoaderCircle size={15} className="animate-spin" />
-              正在听你说
-            </div>
-          ) : null}
-        </div>
-      </section>
-      <section className="px-5 pb-5">
-        <div className="rounded-[8px] border border-[#dfe6df] bg-white p-3 shadow-sm">
-          <textarea
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                submitMessage();
-              }
-            }}
-            placeholder="讲讲今天发生了什么"
-            rows={4}
-            className="min-h-28 w-full resize-none bg-transparent text-[16px] leading-7 text-[#20302d] outline-none placeholder:text-[#9aa39f]"
-          />
-          <div className="flex items-center justify-between border-t border-[#eef2ee] pt-3">
-            <span className="text-xs text-[#7b8580]">一次说一点就好</span>
+      <div className="relative">
+        <section className="absolute inset-x-0 top-0 z-20 px-5 pt-5">
+          <div className="space-y-4">
+            {latestAgentMessage ? <ChatBubble message={latestAgentMessage} /> : null}
+            {isAgentBusy ? (
+              <div className="flex items-center gap-2 pl-1 text-sm text-[#68736f]">
+                <LoaderCircle size={15} className="animate-spin" />
+                正在听你说
+              </div>
+            ) : null}
+          </div>
+        </section>
+        {!hasStartedWriting ? (
+          <section className="px-5 pb-5 pt-36">
             <button
               type="button"
-              onClick={submitMessage}
-              disabled={!input.trim() || isAgentBusy}
-              className="inline-flex h-10 items-center gap-2 rounded-full bg-[#263d3a] px-4 text-sm font-medium text-white transition hover:bg-[#1b2d2b] disabled:cursor-not-allowed disabled:bg-[#aeb8b2]"
+              onClick={startWriting}
+              className="flex min-h-[52dvh] w-full flex-col items-center justify-center text-center outline-none"
             >
-              <Send size={16} />
-              发送
+              <p className="text-[17px] leading-7 text-[#51615c]">
+                写点什么吧，请按开始
+              </p>
             </button>
-          </div>
-        </div>
-      </section>
+          </section>
+        ) : (
+          <section
+            ref={diaryFrameRef}
+            className="diary-scroll h-[calc(100dvh-6rem)] overflow-y-auto overscroll-contain px-5 pb-6 pt-36"
+          >
+            <div>
+              <div className="animate-[diaryDateIn_700ms_ease-out_forwards] text-center opacity-0">
+                <div className="text-3xl font-semibold tracking-normal text-[#263d3a]">
+                  {writingDate.date}
+                </div>
+                <div className="mt-1 text-sm font-medium text-[#68736f]">
+                  {writingDate.weekday}
+                </div>
+              </div>
+              {writtenParagraphs.length > 0 ? (
+                <div className="mt-8 space-y-4 text-[17px] leading-8 text-[#20302d]">
+                  {writtenParagraphs.map((paragraph, index) => (
+                    <p key={`${paragraph}_${index}`} className="whitespace-pre-wrap break-all">
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    submitMessage();
+                  }
+                }}
+                placeholder={writtenParagraphs.length > 0 ? "继续写下去" : "写下今天的事"}
+                rows={10}
+                autoFocus
+                className="mt-4 min-h-32 w-full resize-none overflow-hidden bg-transparent text-[17px] leading-8 text-[#20302d] outline-none placeholder:text-[#9aa39f]"
+              />
+            </div>
+          </section>
+        )}
+      </div>
     </>
   );
 }
@@ -555,12 +629,19 @@ function ChatBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+    <div className={`flex ${isUser ? "justify-end" : "items-stretch justify-start"}`}>
+      {!isUser ? (
+        <div className="mr-2 grid min-h-14 w-14 shrink-0 items-start justify-items-center">
+          <div className="grid h-14 w-14 place-items-center rounded-full bg-white text-2xl shadow-sm ring-1 ring-[#dfe6df]">
+            🌙
+          </div>
+        </div>
+      ) : null}
       <div
-        className={`max-w-[86%] whitespace-pre-wrap rounded-[8px] px-4 py-3 text-[15px] leading-7 shadow-sm ${
+        className={`min-h-14 min-w-0 whitespace-pre-wrap break-all px-4 py-3 text-[15px] leading-7 shadow-sm ${
           isUser
-            ? "bg-[#263d3a] text-white"
-            : "border border-[#dfe6df] bg-white text-[#263d3a]"
+            ? "max-w-[78%] rounded-[8px] bg-[#263d3a] text-white"
+            : "max-w-[calc(100%-4rem)] rounded-[8px] border border-[#dfe6df] bg-white text-[#263d3a]"
         }`}
       >
         {message.content || " "}
@@ -824,14 +905,8 @@ function NotebookView({
       />
       <section className="space-y-6 px-5 py-5">
         {entries.length === 0 ? (
-          <div className="rounded-[8px] border border-[#dfe6df] bg-white p-6 text-center shadow-sm">
-            <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-[#e9f0eb] text-[#47615b]">
-              <BookOpen size={20} />
-            </div>
-            <h2 className="mt-4 text-lg font-semibold text-[#20302d]">还没有音乐日记</h2>
-            <p className="mt-2 text-sm leading-6 text-[#68736f]">
-              保存第一张卡片后，它会出现在这里。
-            </p>
+          <div className="grid min-h-[55dvh] place-items-center text-sm text-[#7b8580]">
+            还没有日记
           </div>
         ) : null}
 
@@ -1148,6 +1223,64 @@ function DraftDetailView({
   );
 }
 
+const apiSettingsStorageKey = "meloday.api-settings.v1";
+
+type ApiSettings = {
+  deepseekApiKey: string;
+  minimaxApiKey: string;
+};
+
+function loadApiSettings(): ApiSettings {
+  if (typeof window === "undefined") {
+    return { deepseekApiKey: "", minimaxApiKey: "" };
+  }
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(apiSettingsStorageKey) || "{}");
+    return {
+      deepseekApiKey: typeof parsed.deepseekApiKey === "string" ? parsed.deepseekApiKey : "",
+      minimaxApiKey: typeof parsed.minimaxApiKey === "string" ? parsed.minimaxApiKey : "",
+    };
+  } catch {
+    return { deepseekApiKey: "", minimaxApiKey: "" };
+  }
+}
+
+function MineView() {
+  const [settings, setSettings] = useState<ApiSettings>(() => loadApiSettings());
+
+  function updateSetting(key: keyof ApiSettings, value: string) {
+    setSettings((current) => {
+      const next = { ...current, [key]: value };
+      window.localStorage.setItem(apiSettingsStorageKey, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  return (
+    <section className="space-y-3 px-5 py-5">
+      <input
+        value={settings.deepseekApiKey}
+        onChange={(event) => updateSetting("deepseekApiKey", event.target.value)}
+        type="password"
+        autoComplete="off"
+        aria-label="DeepSeek API Key"
+        placeholder="DeepSeek API Key"
+        className="h-12 w-full rounded-[8px] border border-[#dfe6df] bg-white px-3 text-[15px] text-[#20302d] outline-none transition focus:border-[#8fb3a8]"
+      />
+      <input
+        value={settings.minimaxApiKey}
+        onChange={(event) => updateSetting("minimaxApiKey", event.target.value)}
+        type="password"
+        autoComplete="off"
+        aria-label="Minimax API Key"
+        placeholder="Minimax API Key"
+        className="h-12 w-full rounded-[8px] border border-[#dfe6df] bg-white px-3 text-[15px] text-[#20302d] outline-none transition focus:border-[#8fb3a8]"
+      />
+    </section>
+  );
+}
+
 function BackHeader({ goBack, title }: { goBack: () => void; title: string }) {
   return (
     <header className="sticky top-0 z-10 border-b border-[#e1e8e1] bg-[#f8faf7]/92 px-4 py-4 backdrop-blur">
@@ -1171,37 +1304,49 @@ function BottomNav({
   active,
   goToday,
   goNotebook,
+  goMine,
 }: {
-  active: "today" | "notebook";
+  active: "today" | "notebook" | "mine";
   goToday: () => void;
   goNotebook: () => void;
+  goMine: () => void;
 }) {
+  const itemClass = (target: typeof active) =>
+    `grid h-12 w-12 place-items-center rounded-full transition ${
+      active === target
+        ? "bg-[#263d3a] text-white shadow-sm"
+        : "text-[#52645f] hover:bg-[#eef2ee]"
+    }`;
+
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-[#dfe6df] bg-white/94 px-4 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-2 backdrop-blur">
-      <div className="mx-auto grid max-w-md grid-cols-2 gap-2">
+    <nav className="fixed inset-x-0 bottom-0 z-20 px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-2">
+      <div className="mx-auto flex w-fit items-center gap-2 rounded-full border border-[#dfe6df] bg-white/94 p-2 shadow-[0_14px_34px_rgba(50,70,65,0.16)] backdrop-blur">
         <button
           type="button"
           onClick={goToday}
-          className={`flex h-12 items-center justify-center gap-2 rounded-full text-sm font-medium ${
-            active === "today"
-              ? "bg-[#263d3a] text-white"
-              : "bg-[#eef2ee] text-[#52645f]"
-          }`}
+          aria-label="写日记"
+          title="写日记"
+          className={itemClass("today")}
         >
-          <PenLine size={17} />
-          今日
+          <PenLine size={19} />
         </button>
         <button
           type="button"
           onClick={goNotebook}
-          className={`flex h-12 items-center justify-center gap-2 rounded-full text-sm font-medium ${
-            active === "notebook"
-              ? "bg-[#263d3a] text-white"
-              : "bg-[#eef2ee] text-[#52645f]"
-          }`}
+          aria-label="日记本"
+          title="日记本"
+          className={itemClass("notebook")}
         >
-          <BookOpen size={17} />
-          日记本
+          <BookOpen size={19} />
+        </button>
+        <button
+          type="button"
+          onClick={goMine}
+          aria-label="我的"
+          title="我的"
+          className={itemClass("mine")}
+        >
+          <UserRound size={19} />
         </button>
       </div>
     </nav>

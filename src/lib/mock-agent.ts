@@ -41,9 +41,6 @@ const needWords = [
   "力量",
 ];
 
-const directGeneratePattern =
-  /生成|直接|开始|做一首|来一首|写成歌|做成音乐|可以了|够了|不用问|马上/;
-
 export function analyzeConversation(messages: ChatMessage[]): CollectedSignals {
   const userMessages = messages.filter((message) => message.role === "user");
   const userText = userMessages.map((message) => message.content).join("\n");
@@ -66,10 +63,9 @@ export function analyzeConversation(messages: ChatMessage[]): CollectedSignals {
 
 export function getMockAgentTurn(messages: ChatMessage[]): AgentTurnResult {
   const collected = analyzeConversation(messages);
-  const lastUser = [...messages].reverse().find((message) => message.role === "user");
-  const wantsGeneration = directGeneratePattern.test(lastUser?.content ?? "");
+  const userMessages = messages.filter((message) => message.role === "user");
 
-  if (wantsGeneration || (collected.event && collected.emotion && collected.need)) {
+  if (userMessages.length >= 3) {
     return {
       action: "generate",
       collected,

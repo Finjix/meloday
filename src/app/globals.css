@@ -27,3 +27,24 @@ input {
 * {
   -webkit-tap-highlight-color: transparent;
 }
+
+.diary-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.diary-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes diaryDateIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

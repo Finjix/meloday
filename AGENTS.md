@@ -1,3 +1,0 @@
-# AGENTS.md
-
-This project is a mobile-first Next.js App Router MVP for Meloday, an emotion-companion music diary. Keep the first version mock-first unless explicitly asked to wire real APIs: agent flow lives behind `/api/agent-turn`, card generation behind `/api/generate-diary-card`, and regeneration behind `/api/regenerate-diary-card`. Preserve the current storage split: diary metadata in `localStorage`, audio/cover blobs in IndexedDB via `src/lib/storage.ts`, with no auth, cloud sync, PWA, share/export, privacy notice, or generation limits. UI should remain Chinese-only, light theme only, mobile-first, quiet and refined, with Tailwind-authored components and React built-in state. Before handing off changes, run `pnpm lint` and `pnpm build`.
