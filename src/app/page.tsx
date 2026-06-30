@@ -30,9 +30,8 @@ import {
   loadDiaryEntries,
   renameEntry,
   saveGeneratedCard,
-  updateEntryWithGeneratedCard,
 } from "@/lib/storage";
-import type { CardPayload, ChatMessage, DiaryEntry, GeneratedCard } from "@/lib/types";
+import type { ChatMessage, DiaryEntry, GeneratedCard } from "@/lib/types";
 
 type AppView =
   | { name: "today" }
@@ -81,19 +80,6 @@ function disposeGeneratedCard(card?: GeneratedCard | null) {
   if (!card) return;
   URL.revokeObjectURL(card.audioUrl);
   URL.revokeObjectURL(card.coverUrl);
-}
-
-function toCardPayload(card: GeneratedCard | DiaryEntry): CardPayload {
-  if ("musicPrompt" in card) {
-    return card;
-  }
-
-  return {
-    ...card,
-    musicPrompt: "",
-    audioSeed: `${card.id}|${card.title}|${card.updatedAt}`,
-    coverSeed: `${card.id}|${card.coverMeta.query}|${card.updatedAt}`,
-  };
 }
 
 function formatDateLabel(date: string) {
@@ -170,11 +156,6 @@ export default function Home() {
   const [isDraftPreviewOpen, setIsDraftPreviewOpen] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
-  const [pendingSavedVersion, setPendingSavedVersion] = useState<GeneratedCard | null>(
-    null,
-  );
-  const [savedFeedback, setSavedFeedback] = useState("");
-  const [isRegeneratingSaved, setIsRegeneratingSaved] = useState(false);
 
   const currentDraft = draftVersions[draftIndex] ?? null;
   const selectedEntry =
@@ -216,9 +197,47 @@ export default function Home() {
     }
   }
 
+  async function runRegenerationFromMain(card: GeneratedCard, feedback: string) {
+    setGeneration({ running: true, stage: 0 });
+    setIsDraftPreviewOpen(false);
+    setView({ name: "today" });
+
+    try {
+      for (let index = 0; index < generationStages.length - 1; index += 1) {
+        setGeneration({ running: true, stage: index });
+        await sleep(520);
+      }
+
+      setGeneration({ running: true, stage: generationStages.length - 1 });
+      const nextCard = await requestCardRegeneration(card, feedback);
+      draftVersions.forEach(disposeGeneratedCard);
+      setDraftVersions([nextCard]);
+      setDraftIndex(0);
+      setIsDraftPreviewOpen(true);
+      setGeneration(null);
+    } catch (error) {
+      console.error(error);
+      setGeneration({
+        running: false,
+        stage: generationStages.length - 1,
+        error: `重新生成时出了点问题。你可以再试一次。${error instanceof Error ? `（${error.message}）` : ""}`,
+      });
+    }
+  }
+
   async function submitMessage() {
     const content = input.trim();
     if (!content || isAgentBusy || generation?.running) return;
+
+    if (currentDraft) {
+      const userMessage = createMessage("user", content);
+      const assistantMessage = createMessage("agent", "正在为您创作");
+
+      setInput("");
+      setMessages((current) => [...current, userMessage, assistantMessage]);
+      await runRegenerationFromMain(currentDraft, content);
+      return;
+    }
 
     const userMessage = createMessage("user", content);
     const assistantMessage = createMessage("agent", "");
@@ -313,34 +332,6 @@ export default function Home() {
     setView({ name: "notebook" });
   }
 
-  async function regenerateSaved(entry: DiaryEntry) {
-    if (!savedFeedback.trim()) return;
-    setIsRegeneratingSaved(true);
-
-    try {
-      const nextCard = await requestCardRegeneration(toCardPayload(entry), savedFeedback);
-      disposeGeneratedCard(pendingSavedVersion);
-      setPendingSavedVersion(nextCard);
-      setSavedFeedback("");
-    } finally {
-      setIsRegeneratingSaved(false);
-    }
-  }
-
-  async function commitPendingSaved(entry: DiaryEntry) {
-    if (!pendingSavedVersion) return;
-    const updated = await updateEntryWithGeneratedCard(entry, pendingSavedVersion);
-    disposeGeneratedCard(pendingSavedVersion);
-    setPendingSavedVersion(null);
-    refreshEntries();
-    setView({ name: "entry", id: updated.id });
-  }
-
-  function discardPendingSaved() {
-    disposeGeneratedCard(pendingSavedVersion);
-    setPendingSavedVersion(null);
-  }
-
   return (
     <main className="min-h-dvh bg-[#f5f7f4] text-[#20302d]">
       <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-[#f8faf7] shadow-[0_0_60px_rgba(50,70,65,0.08)]">
@@ -372,7 +363,6 @@ export default function Home() {
             <NotebookView
               entries={entries}
               openEntry={(id) => {
-                setPendingSavedVersion(null);
                 setView({ name: "entry", id });
               }}
               renameEntry={handleRename}
@@ -385,18 +375,10 @@ export default function Home() {
             <EntryDetailView
               entry={selectedEntry}
               goBack={() => {
-                discardPendingSaved();
                 setView({ name: "notebook" });
               }}
               renameEntry={handleRename}
               deleteEntry={handleDelete}
-              feedback={savedFeedback}
-              setFeedback={setSavedFeedback}
-              regenerateSaved={regenerateSaved}
-              isRegenerating={isRegeneratingSaved}
-              pending={pendingSavedVersion}
-              commitPending={commitPendingSaved}
-              discardPending={discardPendingSaved}
             />
           ) : null}
 
@@ -422,12 +404,10 @@ export default function Home() {
           }
           goToday={() => setView({ name: "today" })}
           goNotebook={() => {
-            setPendingSavedVersion(null);
             refreshEntries();
             setView({ name: "notebook" });
           }}
           goMine={() => {
-            setPendingSavedVersion(null);
             setView({ name: "mine" });
           }}
         />
@@ -495,6 +475,11 @@ function TodayView({
   }, [input, writtenParagraphs, hasStartedWriting]);
 
   const isGenerating = Boolean(generation?.running && !generation.error);
+  const inputPlaceholder = draft
+    ? "还有什么说的吗"
+    : writtenParagraphs.length > 0
+      ? "继续写下去"
+      : "写下今天的事";
 
   return (
     <>
@@ -566,7 +551,7 @@ function TodayView({
                   }
                 }}
                 disabled={isGenerating}
-                placeholder={writtenParagraphs.length > 0 ? "继续写下去" : "写下今天的事"}
+                placeholder={inputPlaceholder}
                 rows={10}
                 autoFocus
                 className="mt-4 min-h-32 w-full resize-none overflow-hidden bg-transparent text-[17px] leading-8 text-[#20302d] outline-none placeholder:text-[#9aa39f] disabled:text-[#8e9994]"
@@ -837,43 +822,6 @@ function FloatingDraftCard({
   );
 }
 
-function RegenerateBox({
-  value,
-  setValue,
-  onSubmit,
-  loading,
-  placeholder,
-}: {
-  value: string;
-  setValue: (value: string) => void;
-  onSubmit: () => void;
-  loading: boolean;
-  placeholder: string;
-}) {
-  return (
-    <div className="rounded-[8px] border border-[#dfe6df] bg-white p-3 shadow-sm">
-      <textarea
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        rows={3}
-        placeholder={placeholder}
-        className="w-full resize-none bg-transparent text-[15px] leading-6 text-[#20302d] outline-none placeholder:text-[#9aa39f]"
-      />
-      <div className="flex justify-end border-t border-[#eef2ee] pt-3">
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={!value.trim() || loading}
-          className="inline-flex h-10 items-center gap-2 rounded-full bg-[#d47d6a] px-4 text-sm font-medium text-white disabled:bg-[#d9b7ae]"
-        >
-          {loading ? <LoaderCircle size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-          重新生成
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function NotebookView({
   entries,
   openEntry,
@@ -1039,25 +987,11 @@ function EntryDetailView({
   goBack,
   renameEntry,
   deleteEntry,
-  feedback,
-  setFeedback,
-  regenerateSaved,
-  isRegenerating,
-  pending,
-  commitPending,
-  discardPending,
 }: {
   entry?: DiaryEntry;
   goBack: () => void;
   renameEntry: (id: string, title: string) => void;
   deleteEntry: (entry: DiaryEntry) => void;
-  feedback: string;
-  setFeedback: (value: string) => void;
-  regenerateSaved: (entry: DiaryEntry) => void;
-  isRegenerating: boolean;
-  pending: GeneratedCard | null;
-  commitPending: (entry: DiaryEntry) => void;
-  discardPending: () => void;
 }) {
   const { audioUrl, coverUrl } = useEntryMedia(entry);
   const [editing, setEditing] = useState(false);
@@ -1129,43 +1063,6 @@ function EntryDetailView({
             {entry.fullDiary}
           </p>
         </div>
-
-        {pending ? (
-          <div className="space-y-4 rounded-[8px] border border-[#d47d6a]/40 bg-[#fffaf7] p-4 shadow-sm">
-            <div>
-              <p className="text-xs font-semibold text-[#bd6253]">待确认版本</p>
-              <h3 className="mt-1 text-xl font-semibold text-[#20302d]">{pending.title}</h3>
-            </div>
-            <CoverArt title={pending.title} summary={pending.summary} coverUrl={pending.coverUrl} compact />
-            <AudioPlayer src={pending.audioUrl} label={pending.title} />
-            <p className="text-sm leading-7 text-[#68736f]">{pending.summary}</p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => commitPending(entry)}
-                className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-[#263d3a] text-sm font-medium text-white"
-              >
-                <Save size={16} />
-                保存更改
-              </button>
-              <button
-                type="button"
-                onClick={discardPending}
-                className="h-11 flex-1 rounded-full border border-[#cfd8d1] bg-white text-sm font-medium text-[#263d3a]"
-              >
-                放弃
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        <RegenerateBox
-          value={feedback}
-          setValue={setFeedback}
-          onSubmit={() => regenerateSaved(entry)}
-          loading={isRegenerating}
-          placeholder="比如：保留日记，只让音乐更安静一点"
-        />
 
         <button
           type="button"
