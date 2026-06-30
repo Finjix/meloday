@@ -5,8 +5,11 @@ import {
   Check,
   ChevronLeft,
   LoaderCircle,
+  Maximize2,
   Music2,
+  Pause,
   PenLine,
+  Play,
   RefreshCw,
   Save,
   Trash2,
@@ -164,8 +167,7 @@ export default function Home() {
   } | null>(null);
   const [draftVersions, setDraftVersions] = useState<GeneratedCard[]>([]);
   const [draftIndex, setDraftIndex] = useState(0);
-  const [draftFeedback, setDraftFeedback] = useState("");
-  const [isRegeneratingDraft, setIsRegeneratingDraft] = useState(false);
+  const [isDraftPreviewOpen, setIsDraftPreviewOpen] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [pendingSavedVersion, setPendingSavedVersion] = useState<GeneratedCard | null>(
@@ -202,7 +204,7 @@ export default function Home() {
       draftVersions.forEach(disposeGeneratedCard);
       setDraftVersions([card]);
       setDraftIndex(0);
-      setDraftFeedback("");
+      setIsDraftPreviewOpen(true);
       setGeneration(null);
     } catch (error) {
       console.error(error);
@@ -245,6 +247,13 @@ export default function Home() {
       setIsAgentBusy(false);
 
       if (meta.action === "generate" && nextWrittenParagraphCount >= 3) {
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === assistantMessage.id
+              ? { ...message, content: "正在为您创作" }
+              : message,
+          ),
+        );
         await runGeneration(conversation);
       }
     } catch {
@@ -256,20 +265,6 @@ export default function Home() {
         ),
       );
       setIsAgentBusy(false);
-    }
-  }
-
-  async function regenerateDraft() {
-    if (!currentDraft || !draftFeedback.trim()) return;
-    setIsRegeneratingDraft(true);
-
-    try {
-      const nextCard = await requestCardRegeneration(currentDraft, draftFeedback);
-      setDraftVersions((current) => [...current, nextCard]);
-      setDraftIndex(draftVersions.length);
-      setDraftFeedback("");
-    } finally {
-      setIsRegeneratingDraft(false);
     }
   }
 
@@ -297,7 +292,7 @@ export default function Home() {
     draftVersions.forEach(disposeGeneratedCard);
     setDraftVersions([]);
     setDraftIndex(0);
-    setDraftFeedback("");
+    setIsDraftPreviewOpen(false);
     setInput("");
     setMessages(initialMessages());
     setWrittenParagraphs([]);
@@ -359,20 +354,16 @@ export default function Home() {
               startWriting={() => setHasStartedWriting(true)}
               setInput={setInput}
               submitMessage={submitMessage}
-              isAgentBusy={isAgentBusy}
               generation={generation}
               retryGeneration={() => runGeneration(messages)}
               draft={currentDraft}
-              draftVersionsCount={draftVersions.length}
-              draftIndex={draftIndex}
-              setDraftIndex={setDraftIndex}
-              draftFeedback={draftFeedback}
-              setDraftFeedback={setDraftFeedback}
-              regenerateDraft={regenerateDraft}
-              isRegeneratingDraft={isRegeneratingDraft}
-              saveCurrentDraft={saveCurrentDraft}
-              isSavingDraft={isSavingDraft}
-              openDraftDetail={() => setView({ name: "draft-detail" })}
+              isDraftPreviewOpen={isDraftPreviewOpen}
+              openDraftPreview={() => setIsDraftPreviewOpen(true)}
+              closeDraftPreview={() => setIsDraftPreviewOpen(false)}
+              openDraftDetail={() => {
+                setIsDraftPreviewOpen(false);
+                setView({ name: "draft-detail" });
+              }}
               resetToday={resetToday}
             />
           ) : null}
@@ -458,19 +449,12 @@ function TodayView({
   startWriting,
   setInput,
   submitMessage,
-  isAgentBusy,
   generation,
   retryGeneration,
   draft,
-  draftVersionsCount,
-  draftIndex,
-  setDraftIndex,
-  draftFeedback,
-  setDraftFeedback,
-  regenerateDraft,
-  isRegeneratingDraft,
-  saveCurrentDraft,
-  isSavingDraft,
+  isDraftPreviewOpen,
+  openDraftPreview,
+  closeDraftPreview,
   openDraftDetail,
   resetToday,
 }: {
@@ -481,19 +465,12 @@ function TodayView({
   startWriting: () => void;
   setInput: (value: string) => void;
   submitMessage: () => void;
-  isAgentBusy: boolean;
   generation: { running: boolean; stage: number; error?: string } | null;
   retryGeneration: () => void;
   draft: GeneratedCard | null;
-  draftVersionsCount: number;
-  draftIndex: number;
-  setDraftIndex: (index: number) => void;
-  draftFeedback: string;
-  setDraftFeedback: (value: string) => void;
-  regenerateDraft: () => void;
-  isRegeneratingDraft: boolean;
-  saveCurrentDraft: () => void;
-  isSavingDraft: boolean;
+  isDraftPreviewOpen: boolean;
+  openDraftPreview: () => void;
+  closeDraftPreview: () => void;
   openDraftDetail: () => void;
   resetToday: () => void;
 }) {
@@ -517,34 +494,7 @@ function TodayView({
     frame.scrollTop = frame.scrollHeight;
   }, [input, writtenParagraphs, hasStartedWriting]);
 
-  if (generation) {
-    return (
-      <GenerationView
-        generation={generation}
-        retryGeneration={retryGeneration}
-        resetToday={resetToday}
-      />
-    );
-  }
-
-  if (draft) {
-    return (
-      <DraftResultView
-        draft={draft}
-        draftVersionsCount={draftVersionsCount}
-        draftIndex={draftIndex}
-        setDraftIndex={setDraftIndex}
-        draftFeedback={draftFeedback}
-        setDraftFeedback={setDraftFeedback}
-        regenerateDraft={regenerateDraft}
-        isRegeneratingDraft={isRegeneratingDraft}
-        saveCurrentDraft={saveCurrentDraft}
-        isSavingDraft={isSavingDraft}
-        openDraftDetail={openDraftDetail}
-        resetToday={resetToday}
-      />
-    );
-  }
+  const isGenerating = Boolean(generation?.running && !generation.error);
 
   return (
     <>
@@ -558,12 +508,8 @@ function TodayView({
       <div className="relative">
         <section className="absolute inset-x-0 top-0 z-20 px-5 pt-5">
           <div className="space-y-4">
-            {latestAgentMessage ? <ChatBubble message={latestAgentMessage} /> : null}
-            {isAgentBusy ? (
-              <div className="flex items-center gap-2 pl-1 text-sm text-[#68736f]">
-                <LoaderCircle size={15} className="animate-spin" />
-                正在听你说
-              </div>
+            {latestAgentMessage ? (
+              <ChatBubble message={latestAgentMessage} loading={isGenerating} />
             ) : null}
           </div>
         </section>
@@ -602,6 +548,13 @@ function TodayView({
                   ))}
                 </div>
               ) : null}
+              {draft && !generation ? (
+                <InlineDraftCard
+                  draft={draft}
+                  openDraftPreview={openDraftPreview}
+                  openDraftDetail={openDraftDetail}
+                />
+              ) : null}
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -612,20 +565,35 @@ function TodayView({
                     submitMessage();
                   }
                 }}
+                disabled={isGenerating}
                 placeholder={writtenParagraphs.length > 0 ? "继续写下去" : "写下今天的事"}
                 rows={10}
                 autoFocus
-                className="mt-4 min-h-32 w-full resize-none overflow-hidden bg-transparent text-[17px] leading-8 text-[#20302d] outline-none placeholder:text-[#9aa39f]"
+                className="mt-4 min-h-32 w-full resize-none overflow-hidden bg-transparent text-[17px] leading-8 text-[#20302d] outline-none placeholder:text-[#9aa39f] disabled:text-[#8e9994]"
               />
             </div>
           </section>
         )}
       </div>
+      {generation?.error ? (
+        <GenerationErrorToast
+          message={generation.error}
+          retryGeneration={retryGeneration}
+          resetToday={resetToday}
+        />
+      ) : null}
+      {draft && isDraftPreviewOpen && !generation ? (
+        <FloatingDraftCard
+          draft={draft}
+          closeDraftPreview={closeDraftPreview}
+          openDraftDetail={openDraftDetail}
+        />
+      ) : null}
     </>
   );
 }
 
-function ChatBubble({ message }: { message: ChatMessage }) {
+function ChatBubble({ message, loading = false }: { message: ChatMessage; loading?: boolean }) {
   const isUser = message.role === "user";
 
   return (
@@ -644,189 +612,228 @@ function ChatBubble({ message }: { message: ChatMessage }) {
             : "max-w-[calc(100%-4rem)] rounded-[8px] border border-[#dfe6df] bg-white text-[#263d3a]"
         }`}
       >
-        {message.content || " "}
+        <span>{message.content || " "}</span>
+        {loading ? (
+          <LoaderCircle
+            size={15}
+            className="ml-2 inline-block animate-spin align-[-2px] text-[#d47d6a]"
+          />
+        ) : null}
       </div>
     </div>
   );
 }
 
-function GenerationView({
-  generation,
+function GenerationErrorToast({
+  message,
   retryGeneration,
   resetToday,
 }: {
-  generation: { running: boolean; stage: number; error?: string };
+  message: string;
   retryGeneration: () => void;
   resetToday: () => void;
 }) {
   return (
-    <>
-      <AppHeader />
-      <section className="px-5 py-10">
-        <div className="flex flex-col items-center text-center">
-          <div className="grid h-16 w-16 place-items-center rounded-full bg-[#263d3a] text-white shadow-sm">
-            {generation.error ? <X size={24} /> : <Music2 size={25} />}
+    <div className="fixed inset-x-0 bottom-28 z-30 px-4">
+      <div className="mx-auto max-w-md rounded-[8px] border border-[#efc8c1] bg-white p-4 shadow-[0_18px_40px_rgba(50,70,65,0.18)]">
+        <div className="flex items-start gap-3">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#fbebe7] text-[#bd6253]">
+            <X size={17} />
           </div>
-          <h2 className="mt-5 text-2xl font-semibold tracking-normal text-[#20302d]">
-            {generation.error ? "生成没有完成" : "正在写成音乐日记"}
-          </h2>
-          <p className="mt-2 max-w-xs text-sm leading-6 text-[#68736f]">
-            {generation.error ?? "我会先整理今天的心情，再把它交给一段纯器乐。"}
-          </p>
-        </div>
-
-        <div className="mt-8 space-y-3">
-          {generationStages.map((stage, index) => {
-            const active = index === generation.stage && !generation.error;
-            const done = index < generation.stage && !generation.error;
-            return (
-              <div
-                key={stage}
-                className="flex items-center gap-3 rounded-[8px] border border-[#dfe6df] bg-white px-4 py-3 shadow-sm"
-              >
-                <div
-                  className={`grid h-8 w-8 place-items-center rounded-full ${
-                    done
-                      ? "bg-[#b7d8cf] text-[#20302d]"
-                      : active
-                        ? "bg-[#d47d6a] text-white"
-                        : "bg-[#eef2ee] text-[#7b8580]"
-                  }`}
-                >
-                  {done ? <Check size={16} /> : active ? <LoaderCircle size={16} className="animate-spin" /> : index + 1}
-                </div>
-                <span className="text-sm font-medium text-[#263d3a]">{stage}</span>
-              </div>
-            );
-          })}
-        </div>
-
-        {generation.error ? (
-          <div className="mt-6 flex gap-3">
-            <button
-              type="button"
-              onClick={retryGeneration}
-              className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-[#263d3a] px-4 text-sm font-medium text-white"
-            >
-              <RefreshCw size={16} />
-              重试
-            </button>
-            <button
-              type="button"
-              onClick={resetToday}
-              className="h-11 flex-1 rounded-full border border-[#cfd8d1] bg-white px-4 text-sm font-medium text-[#263d3a]"
-            >
-              重新讲
-            </button>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-[#20302d]">创作没有完成</p>
+            <p className="mt-1 text-xs leading-5 text-[#68736f]">{message}</p>
           </div>
-        ) : null}
-      </section>
-    </>
-  );
-}
-
-function DraftResultView({
-  draft,
-  draftVersionsCount,
-  draftIndex,
-  setDraftIndex,
-  draftFeedback,
-  setDraftFeedback,
-  regenerateDraft,
-  isRegeneratingDraft,
-  saveCurrentDraft,
-  isSavingDraft,
-  openDraftDetail,
-  resetToday,
-}: {
-  draft: GeneratedCard;
-  draftVersionsCount: number;
-  draftIndex: number;
-  setDraftIndex: (index: number) => void;
-  draftFeedback: string;
-  setDraftFeedback: (value: string) => void;
-  regenerateDraft: () => void;
-  isRegeneratingDraft: boolean;
-  saveCurrentDraft: () => void;
-  isSavingDraft: boolean;
-  openDraftDetail: () => void;
-  resetToday: () => void;
-}) {
-  return (
-    <>
-      <AppHeader
-        right={
+        </div>
+        <div className="mt-4 flex gap-3">
+          <button
+            type="button"
+            onClick={retryGeneration}
+            className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-full bg-[#263d3a] px-4 text-sm font-medium text-white"
+          >
+            <RefreshCw size={15} />
+            重试
+          </button>
           <button
             type="button"
             onClick={resetToday}
-            title="写新的日记"
-            aria-label="写新的日记"
-            className="grid h-11 w-11 place-items-center rounded-full bg-[#e9f0eb] text-[#47615b]"
+            className="h-10 flex-1 rounded-full border border-[#cfd8d1] bg-white px-4 text-sm font-medium text-[#263d3a]"
           >
-            <PenLine size={19} />
+            重新讲
           </button>
-        }
-      />
-      <section className="space-y-5 px-5 py-5">
-        <CoverArt title={draft.title} summary={draft.summary} coverUrl={draft.coverUrl} />
-        <AudioPlayer src={draft.audioUrl} label="生成的纯器乐" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
-        <div className="rounded-[8px] border border-[#dfe6df] bg-white p-4 shadow-sm">
-          <p className="text-sm leading-6 text-[#68736f]">{draft.summary}</p>
+function InlineDraftCard({
+  draft,
+  openDraftPreview,
+  openDraftDetail,
+}: {
+  draft: GeneratedCard;
+  openDraftPreview: () => void;
+  openDraftDetail: () => void;
+}) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  async function togglePlayback(event: React.MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (audio.paused) {
+      await audio.play();
+      setIsPlaying(true);
+    } else {
+      audio.pause();
+      setIsPlaying(false);
+    }
+  }
+
+  function expandDetail(event: React.MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    openDraftDetail();
+  }
+
+  return (
+    <article
+      onClick={openDraftPreview}
+      className="mt-6 grid cursor-pointer grid-cols-[76px_1fr_auto] items-center gap-3 rounded-[8px] border border-[#dfe6df] bg-white/92 p-3 shadow-sm transition active:scale-[0.99]"
+    >
+      <audio
+        key={draft.audioUrl}
+        ref={audioRef}
+        src={draft.audioUrl}
+        preload="auto"
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => setIsPlaying(false)}
+      />
+      <div
+        className="aspect-square overflow-hidden rounded-[8px] bg-[#dbe7e3] bg-cover bg-center"
+        style={{ backgroundImage: `url(${draft.coverUrl})` }}
+        aria-label="生成卡片封面"
+      />
+      <div className="min-w-0">
+        <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#d47d6a]">
+          Meloday
+        </p>
+        <h2 className="mt-1 truncate text-base font-semibold text-[#20302d]">
+          {draft.title}
+        </h2>
+        <p className="mt-1 truncate text-xs text-[#68736f]">今日纯器乐日记已完成</p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={togglePlayback}
+          aria-label={isPlaying ? "暂停音乐" : "播放音乐"}
+          title={isPlaying ? "暂停音乐" : "播放音乐"}
+          className="grid h-10 w-10 place-items-center rounded-full bg-[#263d3a] text-white"
+        >
+          {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
+        </button>
+        <button
+          type="button"
+          onClick={expandDetail}
+          aria-label="展开卡片"
+          title="展开卡片"
+          className="grid h-10 w-10 place-items-center rounded-full bg-[#edf2ee] text-[#47615b]"
+        >
+          <Maximize2 size={16} />
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function FloatingDraftCard({
+  draft,
+  closeDraftPreview,
+  openDraftDetail,
+}: {
+  draft: GeneratedCard;
+  closeDraftPreview: () => void;
+  openDraftDetail: () => void;
+}) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  async function togglePlayback() {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (audio.paused) {
+      await audio.play();
+      setIsPlaying(true);
+    } else {
+      audio.pause();
+      setIsPlaying(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-30 grid place-items-center bg-[#20302d]/18 px-6 pb-20 backdrop-blur-[6px]"
+      onClick={closeDraftPreview}
+    >
+      <article
+        className="relative aspect-square w-full max-w-[340px] overflow-hidden rounded-[8px] border border-white/80 bg-[#dbe7e3] bg-cover bg-center shadow-[0_22px_54px_rgba(32,48,45,0.24)] animate-[draftCardIn_260ms_ease-out_forwards]"
+        style={{ backgroundImage: `url(${draft.coverUrl})` }}
+        aria-label="生成卡片预览"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <audio
+          key={draft.audioUrl}
+          ref={audioRef}
+          src={draft.audioUrl}
+          preload="auto"
+          onPause={() => setIsPlaying(false)}
+          onEnded={() => setIsPlaying(false)}
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(20,31,29,0.08)_0%,rgba(20,31,29,0.12)_42%,rgba(20,31,29,0.72)_100%)]" />
+        <button
+          type="button"
+          onClick={closeDraftPreview}
+          aria-label="关闭卡片"
+          title="关闭卡片"
+          className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full bg-white/88 text-[#263d3a] shadow-sm backdrop-blur"
+        >
+          <X size={17} />
+        </button>
+        <div className="absolute inset-x-0 bottom-0 p-4 pr-28 text-white">
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/78">
+            Meloday
+          </p>
+          <h2 className="mt-1 line-clamp-2 text-2xl font-semibold leading-tight">
+            {draft.title}
+          </h2>
+          <p className="mt-2 text-xs text-white/82">今日纯器乐日记已完成</p>
+        </div>
+        <div className="absolute bottom-4 right-4 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={togglePlayback}
+            aria-label={isPlaying ? "暂停音乐" : "播放音乐"}
+            title={isPlaying ? "暂停音乐" : "播放音乐"}
+            className="grid h-11 w-11 place-items-center rounded-full bg-white text-[#263d3a] shadow-sm"
+          >
+            {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
+          </button>
           <button
             type="button"
             onClick={openDraftDetail}
-            className="mt-4 h-10 w-full rounded-full border border-[#cfd8d1] text-sm font-medium text-[#263d3a]"
+            aria-label="展开卡片"
+            title="展开卡片"
+            className="grid h-11 w-11 place-items-center rounded-full bg-[#263d3a] text-white shadow-sm"
           >
-            查看完整日记
+            <Maximize2 size={16} />
           </button>
         </div>
-
-        {draftVersionsCount > 1 ? (
-          <div className="flex items-center justify-between rounded-[8px] border border-[#dfe6df] bg-white px-3 py-2 text-sm text-[#68736f] shadow-sm">
-            <button
-              type="button"
-              onClick={() => setDraftIndex(Math.max(0, draftIndex - 1))}
-              disabled={draftIndex === 0}
-              className="rounded-full px-3 py-2 font-medium text-[#263d3a] disabled:text-[#aeb8b2]"
-            >
-              上一版
-            </button>
-            <span>
-              第 {draftIndex + 1} / {draftVersionsCount} 版
-            </span>
-            <button
-              type="button"
-              onClick={() => setDraftIndex(Math.min(draftVersionsCount - 1, draftIndex + 1))}
-              disabled={draftIndex === draftVersionsCount - 1}
-              className="rounded-full px-3 py-2 font-medium text-[#263d3a] disabled:text-[#aeb8b2]"
-            >
-              下一版
-            </button>
-          </div>
-        ) : null}
-
-        <RegenerateBox
-          value={draftFeedback}
-          setValue={setDraftFeedback}
-          onSubmit={regenerateDraft}
-          loading={isRegeneratingDraft}
-          placeholder="比如：更轻快一点，只改音乐"
-        />
-
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={saveCurrentDraft}
-            disabled={isSavingDraft}
-            className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-[#263d3a] px-4 text-sm font-medium text-white disabled:bg-[#aeb8b2]"
-          >
-            {isSavingDraft ? <LoaderCircle size={16} className="animate-spin" /> : <Save size={16} />}
-            保存当前版本
-          </button>
-        </div>
-      </section>
-    </>
+      </article>
+    </div>
   );
 }
 
