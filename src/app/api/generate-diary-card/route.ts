@@ -4,7 +4,7 @@ import {
   generateCardContent,
   ServiceConfigError,
 } from "@/lib/server/deepseek";
-import { generateInstrumentalMusic } from "@/lib/server/minimax";
+import { assertMiniMaxApiKey, generateInstrumentalMusic } from "@/lib/server/minimax";
 
 export const runtime = "nodejs";
 
@@ -18,6 +18,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { messages?: ChatMessage[]; apiKeys?: ApiKeys };
     const messages = Array.isArray(body.messages) ? body.messages : [];
+    assertMiniMaxApiKey(body.apiKeys);
     const content = await generateCardContent(messages, body.apiKeys);
     const audio = await generateInstrumentalMusic(content.musicPrompt, body.apiKeys);
 

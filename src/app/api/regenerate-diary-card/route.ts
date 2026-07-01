@@ -4,7 +4,7 @@ import {
   regenerateCardContent,
   ServiceConfigError,
 } from "@/lib/server/deepseek";
-import { generateInstrumentalMusic } from "@/lib/server/minimax";
+import { assertMiniMaxApiKey, generateInstrumentalMusic } from "@/lib/server/minimax";
 
 export const runtime = "nodejs";
 
@@ -26,6 +26,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Missing card or feedback." }, { status: 400 });
     }
 
+    assertMiniMaxApiKey(body.apiKeys);
     const content = await regenerateCardContent(body.card, body.feedback, body.apiKeys);
     const audio = await generateInstrumentalMusic(content.musicPrompt, body.apiKeys);
 

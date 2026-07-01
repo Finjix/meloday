@@ -54,6 +54,16 @@ function userText(messages: ChatMessage[]) {
     .join("\n");
 }
 
+function lastUserText(messages: ChatMessage[]) {
+  return [...messages].reverse().find((message) => message.role === "user")?.content.trim() ?? "";
+}
+
+function requestsImmediateGeneration(text: string) {
+  return /立即生成|马上生成|直接生成|现在生成|开始生成|开始创作|直接创作|不用问|别问了|不要再问|生成一首|创作一首|做一首|来一首/.test(
+    text.replace(/\s+/g, ""),
+  );
+}
+
 function normalizeBoolean(value: unknown) {
   return typeof value === "boolean" ? value : Boolean(value);
 }
@@ -196,13 +206,16 @@ export async function generateAgentTurn(messages: ChatMessage[], apiKeys?: ApiKe
     apiKeys,
     schema: agentTurnSchema,
     system:
-      "你是 Meloday，一个温柔、克制、会逐步倾听的中文音乐日记陪伴 agent。你必须只输出 JSON。判断用户是否已经说明了事件(event)、情绪(emotion)、以及希望音乐/日记提供的心理功能(need)。如果信息不足，action 用 question 并提出一个简短问题；如果三者基本齐全，action 用 generate，并用一句话说明你将开始创作。",
-    prompt: `对话如下：\n${conversationText(messages)}\n\n请输出 {"action":"question"|"generate","message":"...","collected":{"event":boolean,"emotion":boolean,"need":boolean}}。message 使用中文，语气自然，不要超过 80 字。`,
+      "你是 Meloday，一个温柔、克制、会逐步倾听的中文音乐日记陪伴 agent。你必须只输出 JSON。判断用户是否已经说明了事件(event)、情绪(emotion)、以及希望音乐/日记提供的心理功能(need)。如果信息不足，action 用 question 并提出一个简短问题；如果三者基本齐全，action 用 generate，并用一句话说明你将开始创作。重要：如果用户明确要求立即生成、直接生成、现在创作，或直接提出“生成/创作一首某种音乐”，即使没有具体事件，也必须尊重用户意图，action 用 generate，不要追问事件。",
+    prompt: `对话如下：\n${conversationText(messages)}\n\n请输出 {"action":"question"|"generate","message":"...","collected":{"event":boolean,"emotion":boolean,"need":boolean}}。message 使用中文，语气自然，不要超过 80 字。若用户要求立即生成，message 直接确认开始创作。`,
   });
+  const shouldGenerateNow = requestsImmediateGeneration(lastUserText(messages));
 
   return {
-    action: object.action === "generate" ? "generate" : "question",
-    message: requiredText(object.message, "你愿意再多和我说一点今天最留在心里的画面吗？", 140),
+    action: shouldGenerateNow || object.action === "generate" ? "generate" : "question",
+    message: shouldGenerateNow
+      ? requiredText(object.message, "好，我现在就为你生成一首欢快的纯器乐音乐。", 140)
+      : requiredText(object.message, "你愿意再多和我说一点今天最留在心里的画面吗？", 140),
     collected: normalizeCollected(object.collected),
   } satisfies AgentTurnResult;
 }
@@ -232,8 +245,8 @@ export async function generateCardContent(messages: ChatMessage[], apiKeys?: Api
     apiKeys,
     schema: cardContentSchema,
     system:
-      "你是 Meloday 的内容生成器。根据用户倾诉生成一张中文音乐日记卡片，并为 MiniMax 音乐生成写英文器乐 prompt。必须只输出 JSON。日记要真诚、具体、不过度夸张；音乐必须是纯器乐，不要人声、不要歌词。",
-    prompt: `用户倾诉：\n${text}\n\n请生成 JSON：title(中文歌名, 2-10字), summary(中文一句话), fullDiary(中文完整日记, 2-4段), coverMeta(query, source 固定 deepseek-generated, description, palette 四个 #RRGGBB 颜色), musicPrompt(英文, 明确 Instrumental, no vocals, no lyrics, mood, instruments, tempo)。`,
+      "你是 Meloday 的内容生成器。根据用户倾诉或直接音乐需求生成一张中文音乐日记卡片，并为 MiniMax 音乐生成写英文器乐 prompt。必须只输出 JSON。日记要真诚、具体、不过度夸张；如果用户没有提供具体事件，只给出“立即生成一首欢快的音乐”这类需求，就围绕该音乐氛围生成简短卡片，不要编造具体人生事件。音乐必须是纯器乐，不要人声、不要歌词。",
+    prompt: `用户输入：\n${text}\n\n请生成 JSON：title(中文歌名, 2-10字), summary(中文一句话), fullDiary(中文完整日记, 1-4段；没有具体事件时写成今日音乐愿望), coverMeta(query, source 固定 deepseek-generated, description, palette 四个 #RRGGBB 颜色), musicPrompt(英文, 明确 Instrumental, no vocals, no lyrics, mood, instruments, tempo)。`,
   });
 
   return normalizeCardContent(object, text);

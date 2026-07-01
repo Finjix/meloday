@@ -245,7 +245,6 @@ export default function Home() {
       ...writtenParagraphs.map((paragraph) => createMessage("user", paragraph)),
       userMessage,
     ];
-    const nextWrittenParagraphCount = writtenParagraphs.length + 1;
 
     setInput("");
     setWrittenParagraphs((current) => [...current, content]);
@@ -265,7 +264,7 @@ export default function Home() {
 
       setIsAgentBusy(false);
 
-      if (meta.action === "generate" && nextWrittenParagraphCount >= 3) {
+      if (meta.action === "generate") {
         setMessages((current) =>
           current.map((message) =>
             message.id === assistantMessage.id
@@ -1172,7 +1171,7 @@ function MineView() {
         type="password"
         autoComplete="off"
         aria-label="DeepSeek API Key"
-        placeholder="DeepSeek API Key"
+        placeholder="DeepSeek API Key（对话与日记）"
         className="h-12 w-full rounded-[8px] border border-[#dfe6df] bg-white px-3 text-[15px] text-[#20302d] outline-none transition focus:border-[#8fb3a8]"
       />
       <input
@@ -1181,7 +1180,7 @@ function MineView() {
         type="password"
         autoComplete="off"
         aria-label="Minimax API Key"
-        placeholder="Minimax API Key"
+        placeholder="MiniMax API Key（海螺音乐）"
         className="h-12 w-full rounded-[8px] border border-[#dfe6df] bg-white px-3 text-[15px] text-[#20302d] outline-none transition focus:border-[#8fb3a8]"
       />
     </section>
