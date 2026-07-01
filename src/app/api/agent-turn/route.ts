@@ -1,7 +1,7 @@
 import type { ApiKeys, ChatMessage } from "@/lib/types";
 import { generateAgentTurn, ServiceConfigError } from "@/lib/server/deepseek";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));

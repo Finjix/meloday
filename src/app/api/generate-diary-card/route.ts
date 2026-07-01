@@ -6,7 +6,7 @@ import {
 } from "@/lib/server/deepseek";
 import { generateInstrumentalMusic } from "@/lib/server/minimax";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 function errorResponse(error: unknown) {
   const message = error instanceof Error ? error.message : "Card generation failed.";
