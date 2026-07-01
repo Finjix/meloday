@@ -1,16 +1,53 @@
 import type {
   AgentStreamLine,
   AgentStreamMeta,
+  ApiKeys,
   CardPayload,
   ChatMessage,
   GeneratedCard,
 } from "@/lib/types";
-import { createMockAudioBlob, createMockCoverBlob } from "@/lib/media";
+import { createCoverBlob } from "@/lib/media";
+
+const apiSettingsStorageKey = "meloday.api-settings.v1";
+
+function readApiKeys(): ApiKeys | undefined {
+  if (typeof window === "undefined") return undefined;
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(apiSettingsStorageKey) || "{}");
+    return {
+      deepseekApiKey:
+        typeof parsed.deepseekApiKey === "string" ? parsed.deepseekApiKey.trim() : undefined,
+      minimaxApiKey:
+        typeof parsed.minimaxApiKey === "string" ? parsed.minimaxApiKey.trim() : undefined,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function hexToBlob(hex: string, mimeType: string) {
+  const normalized = hex.trim();
+  if (normalized.length % 2 !== 0) {
+    throw new Error("Audio data is not valid hex.");
+  }
+
+  const bytes = new Uint8Array(normalized.length / 2);
+  for (let index = 0; index < normalized.length; index += 2) {
+    const value = Number.parseInt(normalized.slice(index, index + 2), 16);
+    if (Number.isNaN(value)) {
+      throw new Error("Audio data is not valid hex.");
+    }
+    bytes[index / 2] = value;
+  }
+
+  return new Blob([bytes], { type: mimeType || "audio/mpeg" });
+}
 
 async function materializeCard(payload: CardPayload): Promise<GeneratedCard> {
   const [audioBlob, coverBlob] = await Promise.all([
-    Promise.resolve(createMockAudioBlob(payload.audioSeed)),
-    createMockCoverBlob(payload.coverMeta, payload.title, payload.coverSeed),
+    Promise.resolve(hexToBlob(payload.audioHex, payload.audioMimeType)),
+    createCoverBlob(payload.coverMeta, payload.title, payload.coverSeed),
   ]);
 
   return {
@@ -27,6 +64,15 @@ function parseStreamLine(line: string): AgentStreamLine | undefined {
   return JSON.parse(line) as AgentStreamLine;
 }
 
+async function readError(response: Response, fallback: string) {
+  try {
+    const body = (await response.json()) as { error?: string };
+    return body.error || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function requestAgentTurn(
   messages: ChatMessage[],
   onDelta: (delta: string) => void,
@@ -34,11 +80,11 @@ export async function requestAgentTurn(
   const response = await fetch("/api/agent-turn", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, apiKeys: readApiKeys() }),
   });
 
   if (!response.ok) {
-    throw new Error("Agent response failed.");
+    throw new Error(await readError(response, "Agent response failed."));
   }
 
   const reader = response.body?.getReader();
@@ -86,11 +132,11 @@ export async function requestCardGeneration(messages: ChatMessage[]) {
   const response = await fetch("/api/generate-diary-card", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, apiKeys: readApiKeys() }),
   });
 
   if (!response.ok) {
-    throw new Error("Card generation failed.");
+    throw new Error(await readError(response, "Card generation failed."));
   }
 
   return materializeCard((await response.json()) as CardPayload);
@@ -100,11 +146,11 @@ export async function requestCardRegeneration(card: CardPayload, feedback: strin
   const response = await fetch("/api/regenerate-diary-card", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ card, feedback }),
+    body: JSON.stringify({ card, feedback, apiKeys: readApiKeys() }),
   });
 
   if (!response.ok) {
-    throw new Error("Regeneration failed.");
+    throw new Error(await readError(response, "Regeneration failed."));
   }
 
   return materializeCard((await response.json()) as CardPayload);

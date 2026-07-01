@@ -275,11 +275,14 @@ export default function Home() {
         );
         await runGeneration(conversation);
       }
-    } catch {
+    } catch (error) {
       setMessages((current) =>
         current.map((message) =>
           message.id === assistantMessage.id
-            ? { ...message, content: "刚刚连接不太稳定。你可以再发一次，我会接着听。" }
+            ? {
+                ...message,
+                content: `生成回复时出了点问题。${error instanceof Error ? error.message : "请稍后再试。"}`,
+              }
             : message,
         ),
       );

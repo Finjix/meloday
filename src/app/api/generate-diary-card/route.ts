@@ -1,23 +1,30 @@
-import type { ChatMessage } from "@/lib/types";
-import { createMockCard } from "@/lib/mock-card";
-import { isRealAiModeEnabled } from "@/lib/server/deepseek";
+import type { ApiKeys, ChatMessage } from "@/lib/types";
+import {
+  assembleCardPayload,
+  generateCardContent,
+  ServiceConfigError,
+} from "@/lib/server/deepseek";
+import { generateInstrumentalMusic } from "@/lib/server/minimax";
 
 export const runtime = "edge";
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function errorResponse(error: unknown) {
+  const message = error instanceof Error ? error.message : "Card generation failed.";
+  const status = error instanceof ServiceConfigError ? error.status : 502;
+  return Response.json({ error: message }, { status });
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as { messages?: ChatMessage[] };
-  const messages = Array.isArray(body.messages) ? body.messages : [];
+  try {
+    const body = (await request.json()) as { messages?: ChatMessage[]; apiKeys?: ApiKeys };
+    const messages = Array.isArray(body.messages) ? body.messages : [];
+    const content = await generateCardContent(messages, body.apiKeys);
+    const audio = await generateInstrumentalMusic(content.musicPrompt, body.apiKeys);
 
-  if (isRealAiModeEnabled()) {
-    // Future real mode: DeepSeek writes diary/prompt and requests web-search cover data.
+    return Response.json(assembleCardPayload(content, audio), {
+      headers: { "Cache-Control": "no-store" },
+    });
+  } catch (error) {
+    return errorResponse(error);
   }
-
-  await sleep(520);
-  return Response.json(createMockCard(messages), {
-    headers: { "Cache-Control": "no-store" },
-  });
 }

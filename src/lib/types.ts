@@ -21,7 +21,7 @@ export type AgentTurnResult = {
 
 export type CoverMeta = {
   query: string;
-  source: "mock-programmatic" | "deepseek-web-search-pending";
+  source: "deepseek-generated";
   description: string;
   palette: {
     from: string;
@@ -41,7 +41,8 @@ export type CardPayload = {
   fullDiary: string;
   coverMeta: CoverMeta;
   musicPrompt: string;
-  audioSeed: string;
+  audioHex: string;
+  audioMimeType: string;
   coverSeed: string;
 };
 
@@ -74,3 +75,8 @@ export type AgentStreamLine =
   | ({ type: "meta" } & AgentStreamMeta)
   | { type: "delta"; text: string }
   | { type: "done" };
+
+export type ApiKeys = {
+  deepseekApiKey?: string;
+  minimaxApiKey?: string;
+};
