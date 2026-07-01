@@ -508,7 +508,7 @@ function TodayView({
               className="flex min-h-[52dvh] w-full flex-col items-center justify-center text-center outline-none"
             >
               <p className="text-[17px] leading-7 text-[#51615c]">
-                写点什么吧，请按开始
+                写点什么吧，轻点屏幕开始
               </p>
             </button>
           </section>
