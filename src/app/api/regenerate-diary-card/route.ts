@@ -4,6 +4,7 @@ import {
   regenerateCardContent,
   ServiceConfigError,
 } from "@/lib/server/deepseek";
+import { agentDebugError, agentDebugLog } from "@/lib/server/debug-log";
 import { assertMiniMaxApiKey, generateInstrumentalMusic } from "@/lib/server/minimax";
 
 export const runtime = "nodejs";
@@ -26,9 +27,19 @@ export async function POST(request: Request) {
       return Response.json({ error: "Missing card or feedback." }, { status: 400 });
     }
 
+    agentDebugLog("regenerate-diary-card request", {
+      card: body.card,
+      feedback: body.feedback,
+      hasDeepSeekApiKey: Boolean(body.apiKeys?.deepseekApiKey),
+      hasMiniMaxApiKey: Boolean(body.apiKeys?.minimaxApiKey),
+    });
     assertMiniMaxApiKey(body.apiKeys);
     const content = await regenerateCardContent(body.card, body.feedback, body.apiKeys);
     const audio = await generateInstrumentalMusic(content.musicPrompt, body.apiKeys);
+    agentDebugLog("regenerate-diary-card response", {
+      content,
+      audio: { mimeType: audio.mimeType, hexLength: audio.hex.length },
+    });
 
     return Response.json(
       assembleCardPayload(content, audio, {
@@ -40,6 +51,7 @@ export async function POST(request: Request) {
       },
     );
   } catch (error) {
+    agentDebugError("regenerate-diary-card error", error);
     return errorResponse(error);
   }
 }

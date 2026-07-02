@@ -1,5 +1,6 @@
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { generateObject, jsonSchema, type Schema } from "ai";
+import { agentDebugLog } from "@/lib/server/debug-log";
 import type {
   AgentTurnResult,
   ApiKeys,
@@ -176,15 +177,28 @@ const cardContentSchema = jsonSchema<CardContent>({
 
 async function generateStructuredObject<T>({
   apiKeys,
+  label,
   system,
   prompt,
   schema,
 }: {
   apiKeys?: ApiKeys;
+  label: string;
   system: string;
   prompt: string;
   schema: Schema<T>;
 }) {
+  const startedAt = Date.now();
+  agentDebugLog(`DeepSeek ${label} input`, {
+    model: deepseekModelId,
+    system,
+    prompt,
+    providerOptions: {
+      deepseek: {
+        thinking: { type: "disabled" },
+      },
+    }
+  });
   const result = await generateObject({
     model: getDeepSeekModel(apiKeys),
     schema,
@@ -198,12 +212,17 @@ async function generateStructuredObject<T>({
       },
     },
   });
+  agentDebugLog(`DeepSeek ${label} output`, {
+    durationMs: Date.now() - startedAt,
+    object: result.object,
+  });
   return result.object;
 }
 
 export async function generateAgentTurn(messages: ChatMessage[], apiKeys?: ApiKeys) {
   const object = await generateStructuredObject<AgentTurnResult>({
     apiKeys,
+    label: "agent-turn",
     schema: agentTurnSchema,
     system:
       "你是 Meloday，一个温柔、克制、会逐步倾听的中文音乐日记陪伴 agent。你必须只输出 JSON。判断用户是否已经说明了事件(event)、情绪(emotion)、以及希望音乐/日记提供的心理功能(need)。如果信息不足，action 用 question 并提出一个简短问题；如果三者基本齐全，action 用 generate，并用一句话说明你将开始创作。重要：如果用户明确要求立即生成、直接生成、现在创作，或直接提出“生成/创作一首某种音乐”，即使没有具体事件，也必须尊重用户意图，action 用 generate，不要追问事件。",
@@ -243,6 +262,7 @@ export async function generateCardContent(messages: ChatMessage[], apiKeys?: Api
   const text = userText(messages);
   const object = await generateStructuredObject<CardContent>({
     apiKeys,
+    label: "generate-card-content",
     schema: cardContentSchema,
     system:
       "你是 Meloday 的内容生成器。根据用户倾诉或直接音乐需求生成一张中文音乐日记卡片，并为 MiniMax 音乐生成写英文器乐 prompt。必须只输出 JSON。日记要真诚、具体、不过度夸张；如果用户没有提供具体事件，只给出“立即生成一首欢快的音乐”这类需求，就围绕该音乐氛围生成简短卡片，不要编造具体人生事件。音乐必须是纯器乐，不要人声、不要歌词。",
@@ -263,6 +283,7 @@ export async function regenerateCardContent(
   );
   const object = await generateStructuredObject<CardContent>({
     apiKeys,
+    label: "regenerate-card-content",
     schema: cardContentSchema,
     system:
       "你是 Meloday 的再生成编辑器。根据用户反馈改写音乐日记卡片，并为 MiniMax 音乐生成写英文器乐 prompt。必须只输出 JSON。音乐必须是纯器乐，不要人声、不要歌词。如果用户要求只改音乐，应保持标题、摘要、日记和封面语义不变，只调整 musicPrompt。",
