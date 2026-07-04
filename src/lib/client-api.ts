@@ -73,10 +73,7 @@ async function readError(response: Response, fallback: string) {
   }
 }
 
-export async function requestAgentTurn(
-  messages: ChatMessage[],
-  onDelta: (delta: string) => void,
-) {
+export async function requestAgentTurn(messages: ChatMessage[]) {
   const response = await fetch("/api/agent-turn", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -95,6 +92,7 @@ export async function requestAgentTurn(
   const decoder = new TextDecoder();
   let buffer = "";
   let meta: AgentStreamMeta | undefined;
+  let text = "";
 
   while (true) {
     const { value, done } = await reader.read();
@@ -107,10 +105,15 @@ export async function requestAgentTurn(
       buffer = buffer.slice(newlineIndex + 1);
       const event = parseStreamLine(line);
       if (event?.type === "meta") {
-        meta = { action: event.action, collected: event.collected };
+        meta = {
+          action: event.action,
+          collected: event.collected,
+          readyToGenerate: event.readyToGenerate,
+          replyCount: event.replyCount,
+        };
       }
       if (event?.type === "delta") {
-        onDelta(event.text);
+        text += event.text;
       }
       newlineIndex = buffer.indexOf("\n");
     }
@@ -118,14 +121,22 @@ export async function requestAgentTurn(
 
   if (buffer.trim()) {
     const event = parseStreamLine(buffer);
-    if (event?.type === "delta") onDelta(event.text);
+    if (event?.type === "delta") text += event.text;
+    if (event?.type === "meta") {
+      meta = {
+        action: event.action,
+        collected: event.collected,
+        readyToGenerate: event.readyToGenerate,
+        replyCount: event.replyCount,
+      };
+    }
   }
 
   if (!meta) {
     throw new Error("Agent stream did not include metadata.");
   }
 
-  return meta;
+  return { ...meta, text };
 }
 
 export async function requestCardGeneration(messages: ChatMessage[]) {
