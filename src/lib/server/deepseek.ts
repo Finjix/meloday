@@ -1,7 +1,7 @@
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { generateObject, jsonSchema, type Schema } from "ai";
-import deepseekPrompts from "@/lib/server/deepseek-prompts.json";
-import { agentDebugLog } from "@/lib/server/debug-log";
+import deepseekPrompts from "@/data/deepseek-prompts.json";
+
 import type {
   AgentTurnResult,
   ApiKeys,
@@ -219,17 +219,6 @@ async function generateStructuredObject<T>({
   prompt: string;
   schema: Schema<T>;
 }) {
-  const startedAt = Date.now();
-  agentDebugLog(`DeepSeek ${label} input`, {
-    model: deepseekModelId,
-    system,
-    prompt,
-    providerOptions: {
-      deepseek: {
-        thinking: { type: "disabled" },
-      },
-    }
-  });
   const result = await generateObject({
     model: getDeepSeekModel(apiKeys),
     schema,
@@ -242,10 +231,6 @@ async function generateStructuredObject<T>({
         thinking: { type: "disabled" },
       },
     },
-  });
-  agentDebugLog(`DeepSeek ${label} output`, {
-    durationMs: Date.now() - startedAt,
-    object: result.object,
   });
   return result.object;
 }
