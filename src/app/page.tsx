@@ -4,6 +4,7 @@ import {
   BookOpen,
   Check,
   ChevronLeft,
+  House,
   LoaderCircle,
   Maximize2,
   Music2,
@@ -13,9 +14,9 @@ import {
   RefreshCw,
   Save,
   Trash2,
-  UserRound,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { CoverArt } from "@/components/CoverArt";
@@ -34,6 +35,8 @@ import {
 import type { ChatMessage, DiaryEntry, GeneratedCard } from "@/lib/types";
 
 type AppView =
+  | { name: "home" }
+  | { name: "diary" }
   | { name: "today" }
   | { name: "notebook" }
   | { name: "mine" }
@@ -285,7 +288,7 @@ function useEntryMedia(entry?: DiaryEntry) {
 }
 
 export default function Home() {
-  const [view, setView] = useState<AppView>({ name: "today" });
+  const [view, setView] = useState<AppView>({ name: "home" });
   const [agentAvatarEmoji, setAgentAvatarEmoji] = useState("🙂");
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages());
   const [input, setInput] = useState("");
@@ -566,13 +569,27 @@ export default function Home() {
     if (!window.confirm(`删除《${entry.title}》吗？`)) return;
     await deleteEntry(entry);
     refreshEntries();
-    setView({ name: "notebook" });
+    setView({ name: "diary" });
   }
 
   return (
-    <main className="min-h-dvh bg-[#f5f7f4] text-[#20302d]">
-      <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-[#f8faf7] shadow-[0_0_60px_rgba(50,70,65,0.08)]">
+    <main className="healing-root min-h-dvh text-[#2f3328]">
+      <div className="healing-phone mx-auto flex min-h-dvh w-full max-w-md flex-col overflow-hidden shadow-[0_0_80px_rgba(73,78,55,0.18)]">
         <div className="flex-1 pb-24">
+          {view.name === "home" ? <HomeDashboardView /> : null}
+
+          {view.name === "diary" ? (
+            <DiaryHubView
+              entries={entries}
+              startWriting={() => setView({ name: "today" })}
+              openEntry={(id) => {
+                setView({ name: "entry", id });
+              }}
+              renameEntry={handleRename}
+              deleteEntry={handleDelete}
+            />
+          ) : null}
+
           {view.name === "today" ? (
             <TodayView
               messages={messages}
@@ -615,7 +632,7 @@ export default function Home() {
             <EntryDetailView
               entry={selectedEntry}
               goBack={() => {
-                setView({ name: "notebook" });
+                setView({ name: "diary" });
               }}
               renameEntry={handleRename}
               deleteEntry={handleDelete}
@@ -636,16 +653,16 @@ export default function Home() {
 
         <BottomNav
           active={
-            view.name === "today" || view.name === "draft-detail"
-              ? "today"
+            view.name === "home"
+              ? "home"
               : view.name === "mine"
                 ? "mine"
-                : "notebook"
+                : "diary"
           }
-          goToday={() => setView({ name: "today" })}
-          goNotebook={() => {
+          goHome={() => setView({ name: "home" })}
+          goDiary={() => {
             refreshEntries();
-            setView({ name: "notebook" });
+            setView({ name: "diary" });
           }}
           goMine={() => {
             setView({ name: "mine" });
@@ -660,6 +677,173 @@ export default function Home() {
 function AppHeader(props: { right?: React.ReactNode }) {
   void props;
   return null;
+}
+
+function HomeDashboardView() {
+  const secondaryModes = [
+    {
+      title: "冥想模式",
+      iconSrc: "/mode-icons/mode-meditate.png?v=1",
+      className: "row-span-2 bg-[#dcebcf] text-[#2f3d29]",
+      iconClassName: "right-[-25%] bottom-[-17%] h-[90%] w-[90%] opacity-55",
+    },
+    {
+      title: "助眠模式",
+      iconSrc: "/mode-icons/mode-sleep.png?v=1",
+      className: "bg-[#ddd3ff] text-[#342f55]",
+      iconClassName: "right-[-24%] bottom-[-31%] h-[104%] w-[104%] opacity-50",
+    },
+    {
+      title: "运动模式",
+      iconSrc: "/mode-icons/mode-move.png?v=1",
+      className: "bg-[#82b7eb] text-[#20364a]",
+      iconClassName: "right-[-25%] bottom-[-29%] h-[108%] w-[108%] opacity-48",
+    },
+  ];
+
+  return (
+    <section className="px-5 pb-6 pt-6">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-[#7a7754]">今天想听点什么</p>
+          <h1 className="mt-1 text-[32px] font-semibold leading-tight text-[#2f3328]">
+            Meloday
+          </h1>
+        </div>
+        <div className="grid h-14 w-14 place-items-center rounded-[8px] border border-[#7a7754]/18 bg-[#f3ff9b] text-[#4a4c33]">
+          <Music2 size={24} strokeWidth={1.7} />
+        </div>
+      </div>
+
+      <article
+        className="relative mt-6 min-h-[268px] overflow-hidden rounded-[8px] bg-[#f3ff9b] p-5 text-left text-[#3f442f] transition active:scale-[0.99]"
+      >
+        <div className="absolute inset-0 bg-[#82b7eb]/26 [clip-path:polygon(0_58%,66%_100%,0_100%)]" />
+        <div className="absolute inset-y-0 left-0 w-[64%] bg-[#fffff7]/30 [clip-path:polygon(0_0,82%_100%,0_100%)]" />
+        <Image
+          src="/mascot/meloday-tiger-listening.png?v=1"
+          alt="小老虎听音乐"
+          width={260}
+          height={220}
+          unoptimized
+          className="absolute bottom-[2px] left-[-14px] z-10 h-auto w-[52%] max-w-[248px] object-contain drop-shadow-[0_8px_8px_rgba(55,89,126,0.16)]"
+          priority
+        />
+        <div className="absolute right-5 top-5 z-20 flex max-w-[13rem] flex-col items-end text-right">
+          <span className="mb-5 grid h-12 w-12 place-items-center rounded-[8px] bg-[#fffff7]/86 text-[#7a7754]">
+            <Play size={18} strokeWidth={1.7} className="ml-0.5" />
+          </span>
+          <h2 className="text-[44px] font-semibold leading-none text-[#343729]">悦听</h2>
+          <p className="mt-4 text-[16px] leading-6 text-[#55583d]">
+            闭上眼，让今天的心情先被声音接住。
+          </p>
+        </div>
+      </article>
+
+      <div className="mt-3 grid h-[234px] grid-cols-[1.08fr_0.92fr] grid-rows-[1.08fr_0.92fr] gap-3">
+        {secondaryModes.map((mode) => {
+          return (
+            <article
+              key={mode.title}
+              className={`relative overflow-hidden rounded-[8px] p-4 text-left transition active:scale-[0.99] ${mode.className}`}
+            >
+              <Image
+                src={mode.iconSrc}
+                alt=""
+                width={260}
+                height={260}
+                unoptimized
+                aria-hidden="true"
+                className={`pointer-events-none absolute z-0 object-contain ${mode.iconClassName}`}
+              />
+              <div className="relative z-10 flex h-full max-w-[8.6rem] flex-col justify-start">
+                <h3 className="text-[26px] font-semibold leading-tight">{mode.title}</h3>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function DiaryHubView({
+  entries,
+  startWriting,
+  openEntry,
+  renameEntry,
+  deleteEntry,
+}: {
+  entries: DiaryEntry[];
+  startWriting: () => void;
+  openEntry: (id: string) => void;
+  renameEntry: (id: string, title: string) => void;
+  deleteEntry: (entry: DiaryEntry) => void;
+}) {
+  const groupedEntries = useMemo(() => {
+    return entries.reduce<Record<string, DiaryEntry[]>>((groups, entry) => {
+      groups[entry.date] = groups[entry.date] ?? [];
+      groups[entry.date].push(entry);
+      return groups;
+    }, {});
+  }, [entries]);
+
+  return (
+    <section className="px-5 pb-6 pt-6">
+      <div>
+        <p className="text-sm font-medium text-[#7a7754]">情绪和音乐的日记本</p>
+        <h1 className="mt-1 text-[30px] font-semibold leading-tight text-[#2f3328]">
+          今天也可以慢慢说
+        </h1>
+      </div>
+
+      <div className="mt-6 grid grid-cols-[1.2fr_0.8fr] gap-3">
+        <button
+          type="button"
+          onClick={startWriting}
+          className="min-h-36 rounded-[8px] bg-[#82b7eb] p-4 text-left text-[#20364a] transition active:scale-[0.99]"
+        >
+          <PenLine size={22} />
+          <h2 className="mt-8 text-2xl font-semibold leading-tight">写一段今天</h2>
+          <p className="mt-2 text-sm leading-5 text-[#20364a]/72">把心情交给 Meloday</p>
+        </button>
+        <div className="min-h-36 rounded-[8px] bg-[#f3ff9b] p-4 text-[#4a4c33]">
+          <BookOpen size={22} />
+          <p className="mt-9 text-[34px] font-semibold leading-none">{entries.length}</p>
+          <p className="mt-1 text-sm text-[#4a4c33]/70">已保存</p>
+        </div>
+      </div>
+
+      <div className="mt-7 space-y-6">
+        {entries.length === 0 ? (
+          <button
+            type="button"
+            onClick={startWriting}
+            className="grid min-h-[34dvh] w-full place-items-center rounded-[8px] border border-[#7a7754]/18 bg-[#fffff7]/78 p-6 text-center text-[#56583d] transition active:scale-[0.99]"
+          >
+            <span className="max-w-[15rem] text-sm leading-6">
+              还没有日记。先写下一段今天，之后生成的音乐会留在这里。
+            </span>
+          </button>
+        ) : null}
+
+        {Object.entries(groupedEntries).map(([date, dayEntries]) => (
+          <div key={date} className="space-y-3">
+            <h2 className="text-sm font-semibold text-[#7a7754]">{formatDateLabel(date)}</h2>
+            {dayEntries.map((entry) => (
+              <NotebookEntryCard
+                key={entry.id}
+                entry={entry}
+                openEntry={openEntry}
+                renameEntry={renameEntry}
+                deleteEntry={deleteEntry}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function TodayView({
@@ -728,7 +912,7 @@ function TodayView({
     <>
       <AppHeader
         right={
-          <div className="grid h-11 w-11 place-items-center rounded-full bg-[#e9f0eb] text-[#47615b]">
+          <div className="healing-blue grid h-11 w-11 place-items-center rounded-full ring-1 ring-white/70">
             <Music2 size={20} />
           </div>
         }
@@ -750,11 +934,23 @@ function TodayView({
             <button
               type="button"
               onClick={startWriting}
-              className="flex min-h-[52dvh] w-full flex-col items-center justify-center text-center outline-none"
+              className="healing-card flex min-h-[52dvh] w-full flex-col items-center justify-center rounded-[8px] px-7 text-center outline-none transition active:scale-[0.99]"
             >
-              <p className="text-[17px] leading-7 text-[#51615c]">
+              <Image
+                src="/mascot/meloday-fox.png?v=4"
+                alt="Meloday mascot"
+                width={144}
+                height={144}
+                unoptimized
+                className="mb-5 h-36 w-36 object-contain drop-shadow-[0_4px_6px_rgba(122,119,84,0.18)]"
+              />
+              <div className="mb-8 h-px w-24 healing-rule" />
+              <p className="max-w-[15rem] text-[18px] leading-8 text-[#56583d]">
                 写点什么吧，轻点屏幕开始
               </p>
+              <div className="mt-8 rounded-full bg-[#f3ff9b] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7a7754]">
+                Meloday
+              </div>
             </button>
           </section>
         ) : (
@@ -764,15 +960,16 @@ function TodayView({
           >
             <div>
               <div className="animate-[diaryDateIn_700ms_ease-out_forwards] text-center opacity-0">
-                <div className="text-3xl font-semibold tracking-normal text-[#263d3a]">
+                <div className="mx-auto mb-4 h-px w-20 healing-rule" />
+                <div className="text-4xl font-semibold tracking-normal text-[#3f442f]">
                   {writingDate.date}
                 </div>
-                <div className="mt-1 text-sm font-medium text-[#68736f]">
+                <div className="mt-2 text-sm font-medium text-[#7a7754]">
                   {writingDate.weekday}
                 </div>
               </div>
               {writtenParagraphs.length > 0 ? (
-                <div className="mt-8 space-y-4 text-[17px] leading-8 text-[#20302d]">
+                <div className="mt-8 space-y-4 text-[17px] leading-8 text-[#363a2b]">
                   {writtenParagraphs.map((paragraph, index) => (
                     <p key={`${paragraph}_${index}`} className="whitespace-pre-wrap break-all">
                       {paragraph}
@@ -801,7 +998,7 @@ function TodayView({
                 placeholder={inputPlaceholder}
                 rows={10}
                 autoFocus
-                className="mt-4 min-h-32 w-full resize-none overflow-hidden bg-transparent text-[17px] leading-8 text-[#20302d] outline-none placeholder:text-[#9aa39f] disabled:text-[#8e9994]"
+                className="mt-4 min-h-32 w-full resize-none overflow-hidden bg-transparent text-[17px] leading-8 text-[#363a2b] outline-none placeholder:text-[#8f8b68] disabled:text-[#9a9676]"
               />
             </div>
           </section>
@@ -839,24 +1036,31 @@ function ChatBubble({
   return (
     <div className={`flex ${isUser ? "justify-end" : "items-stretch justify-start"}`}>
       {!isUser ? (
-        <div className="mr-2 grid min-h-14 w-14 shrink-0 items-start justify-items-center">
-          <div className="grid h-14 w-14 place-items-center rounded-full bg-white text-2xl shadow-sm ring-1 ring-[#dfe6df]">
-            {agentAvatarEmoji}
+        <div className="mr-2 grid min-h-16 w-16 shrink-0 items-start justify-items-center">
+          <div className="grid h-16 w-16 place-items-center rounded-[8px] bg-[#fffff7]/86 shadow-[0_4px_8px_rgba(73,78,55,0.12)] ring-1 ring-[#f3ff9b]/70 backdrop-blur">
+            <Image
+              src="/mascot/meloday-fox.png?v=4"
+              alt={`Meloday ${agentAvatarEmoji}`}
+              width={56}
+              height={56}
+              unoptimized
+              className="h-14 w-14 object-contain"
+            />
           </div>
         </div>
       ) : null}
       <div
         className={`min-h-14 min-w-0 whitespace-pre-wrap break-all px-4 py-3 text-[15px] leading-7 shadow-sm ${
           isUser
-            ? "max-w-[78%] rounded-[8px] bg-[#263d3a] text-white"
-            : "max-w-[calc(100%-4rem)] rounded-[8px] border border-[#dfe6df] bg-white text-[#263d3a]"
+            ? "max-w-[78%] rounded-[8px] bg-[#7a7754] text-[#fffff7]"
+            : "healing-surface max-w-[calc(100%-4rem)] rounded-[8px] text-[#3f442f]"
         }`}
       >
         <span>{message.content || " "}</span>
         {loading ? (
           <LoaderCircle
             size={15}
-            className="ml-2 inline-block animate-spin align-[-2px] text-[#d47d6a]"
+            className="ml-2 inline-block animate-spin align-[-2px] text-[#82b7eb]"
           />
         ) : null}
       </div>
@@ -875,21 +1079,21 @@ function GenerationErrorToast({
 }) {
   return (
     <div className="fixed inset-x-0 bottom-28 z-30 px-4">
-      <div className="mx-auto max-w-md rounded-[8px] border border-[#efc8c1] bg-white p-4 shadow-[0_18px_40px_rgba(50,70,65,0.18)]">
+      <div className="healing-card mx-auto max-w-md rounded-[8px] p-4">
         <div className="flex items-start gap-3">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#fbebe7] text-[#bd6253]">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#f3ff9b] text-[#7a7754]">
             <X size={17} />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-[#20302d]">创作没有完成</p>
-            <p className="mt-1 text-xs leading-5 text-[#68736f]">{message}</p>
+            <p className="text-sm font-semibold text-[#3f442f]">创作没有完成</p>
+            <p className="mt-1 text-xs leading-5 text-[#7a7754]">{message}</p>
           </div>
         </div>
         <div className="mt-4 flex gap-3">
           <button
             type="button"
             onClick={retryGeneration}
-            className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-full bg-[#263d3a] px-4 text-sm font-medium text-white"
+            className="healing-primary inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium"
           >
             <RefreshCw size={15} />
             重试
@@ -897,7 +1101,7 @@ function GenerationErrorToast({
           <button
             type="button"
             onClick={resetToday}
-            className="h-10 flex-1 rounded-full border border-[#cfd8d1] bg-white px-4 text-sm font-medium text-[#263d3a]"
+            className="h-10 flex-1 rounded-full border border-[#7a7754]/20 bg-[#fffff7]/80 px-4 text-sm font-medium text-[#56583d]"
           >
             重新讲
           </button>
@@ -910,7 +1114,7 @@ function GenerationErrorToast({
 function DebugCopyToast({ message }: { message: string }) {
   return (
     <div className="pointer-events-none fixed inset-x-0 top-6 z-50 px-5">
-      <div className="mx-auto w-fit rounded-full bg-[#263d3a] px-4 py-2 text-sm font-medium text-white shadow-[0_12px_30px_rgba(32,48,45,0.22)]">
+      <div className="mx-auto w-fit rounded-full bg-[#7a7754] px-4 py-2 text-sm font-medium text-[#fffff7] shadow-[0_4px_8px_rgba(73,78,55,0.18)]">
         {message}
       </div>
     </div>
@@ -951,7 +1155,7 @@ function InlineDraftCard({
   return (
     <article
       onClick={openDraftPreview}
-      className="mt-6 grid cursor-pointer grid-cols-[76px_1fr_auto] items-center gap-3 rounded-[8px] border border-[#dfe6df] bg-white/92 p-3 shadow-sm transition active:scale-[0.99]"
+      className="healing-card mt-6 grid cursor-pointer grid-cols-[76px_1fr_auto] items-center gap-3 rounded-[8px] p-3 transition active:scale-[0.99]"
     >
       <audio
         key={draft.audioUrl}
@@ -962,18 +1166,18 @@ function InlineDraftCard({
         onEnded={() => setIsPlaying(false)}
       />
       <div
-        className="aspect-square overflow-hidden rounded-[8px] bg-[#dbe7e3] bg-cover bg-center"
+        className="aspect-square overflow-hidden rounded-[8px] bg-[#82b7eb]/30 bg-cover bg-center ring-1 ring-white/70"
         style={{ backgroundImage: `url(${draft.coverUrl})` }}
         aria-label="生成卡片封面"
       />
       <div className="min-w-0">
-        <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#d47d6a]">
+        <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#82b7eb]">
           Meloday
         </p>
-        <h2 className="mt-1 truncate text-base font-semibold text-[#20302d]">
+        <h2 className="mt-1 truncate text-base font-semibold text-[#3f442f]">
           {draft.title}
         </h2>
-        <p className="mt-1 truncate text-xs text-[#68736f]">今日纯器乐日记已完成</p>
+        <p className="mt-1 truncate text-xs text-[#7a7754]">今日纯器乐日记已完成</p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <button
@@ -981,7 +1185,7 @@ function InlineDraftCard({
           onClick={togglePlayback}
           aria-label={isPlaying ? "暂停音乐" : "播放音乐"}
           title={isPlaying ? "暂停音乐" : "播放音乐"}
-          className="grid h-10 w-10 place-items-center rounded-full bg-[#263d3a] text-white"
+          className="healing-primary grid h-10 w-10 place-items-center rounded-full"
         >
           {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
         </button>
@@ -990,7 +1194,7 @@ function InlineDraftCard({
           onClick={expandDetail}
           aria-label="展开卡片"
           title="展开卡片"
-          className="grid h-10 w-10 place-items-center rounded-full bg-[#edf2ee] text-[#47615b]"
+          className="healing-blue grid h-10 w-10 place-items-center rounded-full"
         >
           <Maximize2 size={16} />
         </button>
@@ -1026,11 +1230,11 @@ function FloatingDraftCard({
 
   return (
     <div
-      className="fixed inset-0 z-30 grid place-items-center bg-[#20302d]/18 px-6 pb-20 backdrop-blur-[6px]"
+      className="fixed inset-0 z-30 grid place-items-center bg-[#2f3328]/22 px-6 pb-20 backdrop-blur-[10px]"
       onClick={closeDraftPreview}
     >
       <article
-        className="relative aspect-square w-full max-w-[340px] overflow-hidden rounded-[8px] border border-white/80 bg-[#dbe7e3] bg-cover bg-center shadow-[0_22px_54px_rgba(32,48,45,0.24)] animate-[draftCardIn_260ms_ease-out_forwards]"
+        className="relative aspect-square w-full max-w-[340px] overflow-hidden rounded-[8px] border border-white/80 bg-[#82b7eb]/30 bg-cover bg-center shadow-[0_8px_8px_rgba(73,78,55,0.2)] animate-[draftCardIn_260ms_ease-out_forwards]"
         style={{ backgroundImage: `url(${draft.coverUrl})` }}
         aria-label="生成卡片预览"
         onClick={(event) => event.stopPropagation()}
@@ -1043,13 +1247,13 @@ function FloatingDraftCard({
           onPause={() => setIsPlaying(false)}
           onEnded={() => setIsPlaying(false)}
         />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(20,31,29,0.08)_0%,rgba(20,31,29,0.12)_42%,rgba(20,31,29,0.72)_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,247,0.08)_0%,rgba(63,68,47,0.10)_42%,rgba(47,51,40,0.76)_100%)]" />
         <button
           type="button"
           onClick={closeDraftPreview}
           aria-label="关闭卡片"
           title="关闭卡片"
-          className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full bg-white/88 text-[#263d3a] shadow-sm backdrop-blur"
+          className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full bg-[#fffff7]/88 text-[#3f442f] shadow-sm backdrop-blur"
         >
           <X size={17} />
         </button>
@@ -1068,7 +1272,7 @@ function FloatingDraftCard({
             onClick={togglePlayback}
             aria-label={isPlaying ? "暂停音乐" : "播放音乐"}
             title={isPlaying ? "暂停音乐" : "播放音乐"}
-            className="grid h-11 w-11 place-items-center rounded-full bg-white text-[#263d3a] shadow-sm"
+            className="grid h-11 w-11 place-items-center rounded-full bg-[#fffff7] text-[#3f442f] shadow-sm"
           >
             {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
           </button>
@@ -1077,7 +1281,7 @@ function FloatingDraftCard({
             onClick={openDraftDetail}
             aria-label="展开卡片"
             title="展开卡片"
-            className="grid h-11 w-11 place-items-center rounded-full bg-[#263d3a] text-white shadow-sm"
+            className="grid h-11 w-11 place-items-center rounded-full bg-[#f3ff9b] text-[#4a4c33] shadow-sm"
           >
             <Maximize2 size={16} />
           </button>
@@ -1117,7 +1321,7 @@ function NotebookView({
             onClick={startNew}
             title="写新的日记"
             aria-label="写新的日记"
-            className="grid h-11 w-11 place-items-center rounded-full bg-[#e9f0eb] text-[#47615b]"
+            className="healing-blue grid h-11 w-11 place-items-center rounded-full"
           >
             <PenLine size={19} />
           </button>
@@ -1125,14 +1329,14 @@ function NotebookView({
       />
       <section className="space-y-6 px-5 py-5">
         {entries.length === 0 ? (
-          <div className="grid min-h-[55dvh] place-items-center text-sm text-[#7b8580]">
+          <div className="healing-card grid min-h-[55dvh] place-items-center rounded-[8px] text-sm text-[#7a7754]">
             还没有日记
           </div>
         ) : null}
 
         {Object.entries(groupedEntries).map(([date, dayEntries]) => (
           <div key={date} className="space-y-3">
-            <h2 className="text-sm font-semibold text-[#68736f]">{formatDateLabel(date)}</h2>
+            <h2 className="text-sm font-semibold text-[#7a7754]">{formatDateLabel(date)}</h2>
             {dayEntries.map((entry) => (
               <NotebookEntryCard
                 key={entry.id}
@@ -1169,7 +1373,7 @@ function NotebookEntryCard({
       onClick={() => {
         if (!editing) openEntry(entry.id);
       }}
-      className="cursor-pointer rounded-[8px] border border-[#dfe6df] bg-white p-3 shadow-sm transition active:scale-[0.99]"
+      className="healing-card cursor-pointer rounded-[8px] p-3 transition active:scale-[0.99]"
     >
       <div className="grid grid-cols-[112px_1fr] gap-3">
         <CoverArt title={entry.title} coverUrl={coverUrl} compact />
@@ -1182,7 +1386,7 @@ function NotebookEntryCard({
               <input
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                className="h-9 min-w-0 flex-1 rounded-[8px] border border-[#cfd8d1] px-3 text-sm outline-none"
+                className="h-9 min-w-0 flex-1 rounded-[8px] border border-[#7a7754]/20 bg-[#fffff7]/80 px-3 text-sm outline-none focus:border-[#82b7eb]"
               />
               <button
                 type="button"
@@ -1192,15 +1396,15 @@ function NotebookEntryCard({
                 }}
                 aria-label="保存名称"
                 title="保存名称"
-                className="grid h-9 w-9 place-items-center rounded-full bg-[#263d3a] text-white"
+                className="healing-primary grid h-9 w-9 place-items-center rounded-full"
               >
                 <Check size={15} />
               </button>
             </div>
           ) : (
-            <h3 className="truncate text-lg font-semibold text-[#20302d]">{entry.title}</h3>
+            <h3 className="truncate text-lg font-semibold text-[#3f442f]">{entry.title}</h3>
           )}
-          <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#68736f]">
+          <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#7a7754]">
             {entry.summary}
           </p>
           <div
@@ -1215,7 +1419,7 @@ function NotebookEntryCard({
               }}
               aria-label="重命名"
               title="重命名"
-              className="grid h-9 w-9 place-items-center rounded-full bg-[#edf2ee] text-[#47615b]"
+              className="healing-blue grid h-9 w-9 place-items-center rounded-full"
             >
               <PenLine size={15} />
             </button>
@@ -1224,7 +1428,7 @@ function NotebookEntryCard({
               onClick={() => deleteEntry(entry)}
               aria-label="删除"
               title="删除"
-              className="grid h-9 w-9 place-items-center rounded-full bg-[#fbebe7] text-[#bd6253]"
+              className="grid h-9 w-9 place-items-center rounded-full bg-[#fffff7] text-[#9a675f] ring-1 ring-[#9a675f]/18"
             >
               <Trash2 size={15} />
             </button>
@@ -1233,7 +1437,7 @@ function NotebookEntryCard({
               onClick={() => openEntry(entry.id)}
               aria-label="打开详情"
               title="打开详情"
-              className="grid h-9 w-9 place-items-center rounded-full bg-[#edf2ee] text-[#47615b]"
+              className="healing-blue grid h-9 w-9 place-items-center rounded-full"
             >
               <BookOpen size={15} />
             </button>
@@ -1266,7 +1470,7 @@ function EntryDetailView({
     return (
       <>
         <BackHeader goBack={goBack} title="日记不存在" />
-        <section className="px-5 py-8 text-sm text-[#68736f]">这张卡片可能已经被删除。</section>
+        <section className="px-5 py-8 text-sm text-[#7a7754]">这张卡片可能已经被删除。</section>
       </>
     );
   }
@@ -1278,13 +1482,13 @@ function EntryDetailView({
         <CoverArt title={entry.title} summary={entry.summary} coverUrl={coverUrl} />
         <AudioPlayer src={audioUrl} label={entry.title} />
 
-        <div className="rounded-[8px] border border-[#dfe6df] bg-white p-4 shadow-sm">
+        <div className="healing-card rounded-[8px] p-4">
           {editing ? (
             <div className="flex gap-2">
               <input
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                className="h-10 min-w-0 flex-1 rounded-[8px] border border-[#cfd8d1] px-3 text-sm outline-none"
+                className="h-10 min-w-0 flex-1 rounded-[8px] border border-[#7a7754]/20 bg-[#fffff7]/80 px-3 text-sm outline-none focus:border-[#82b7eb]"
               />
               <button
                 type="button"
@@ -1294,7 +1498,7 @@ function EntryDetailView({
                 }}
                 aria-label="保存名称"
                 title="保存名称"
-                className="grid h-10 w-10 place-items-center rounded-full bg-[#263d3a] text-white"
+                className="healing-primary grid h-10 w-10 place-items-center rounded-full"
               >
                 <Check size={16} />
               </button>
@@ -1302,8 +1506,8 @@ function EntryDetailView({
           ) : (
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-medium text-[#d47d6a]">{formatDateLabel(entry.date)}</p>
-                <h2 className="mt-1 text-2xl font-semibold text-[#20302d]">{entry.title}</h2>
+                <p className="text-xs font-medium text-[#82b7eb]">{formatDateLabel(entry.date)}</p>
+                <h2 className="mt-1 text-2xl font-semibold text-[#3f442f]">{entry.title}</h2>
               </div>
               <button
                 type="button"
@@ -1313,18 +1517,18 @@ function EntryDetailView({
                 }}
                 aria-label="重命名"
                 title="重命名"
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#edf2ee] text-[#47615b]"
+                className="healing-blue grid h-10 w-10 shrink-0 place-items-center rounded-full"
               >
                 <PenLine size={16} />
               </button>
             </div>
           )}
-          <p className="mt-4 text-sm leading-7 text-[#68736f]">{entry.summary}</p>
+          <p className="mt-4 text-sm leading-7 text-[#7a7754]">{entry.summary}</p>
         </div>
 
-        <div className="rounded-[8px] border border-[#dfe6df] bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-[#20302d]">完整日记</h3>
-          <p className="mt-3 whitespace-pre-wrap text-[15px] leading-8 text-[#394a46]">
+        <div className="healing-card rounded-[8px] p-4">
+          <h3 className="text-sm font-semibold text-[#3f442f]">完整日记</h3>
+          <p className="mt-3 whitespace-pre-wrap text-[15px] leading-8 text-[#4d5038]">
             {entry.fullDiary}
           </p>
         </div>
@@ -1332,7 +1536,7 @@ function EntryDetailView({
         <button
           type="button"
           onClick={() => deleteEntry(entry)}
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-[#efc8c1] bg-white text-sm font-medium text-[#bd6253]"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-[#9a675f]/24 bg-[#fffff7]/80 text-sm font-medium text-[#9a675f]"
         >
           <Trash2 size={16} />
           删除这张卡片
@@ -1357,7 +1561,7 @@ function DraftDetailView({
     return (
       <>
         <BackHeader goBack={goBack} title="完整日记" />
-        <section className="px-5 py-8 text-sm text-[#68736f]">还没有生成可查看的卡片。</section>
+        <section className="px-5 py-8 text-sm text-[#7a7754]">还没有生成可查看的卡片。</section>
       </>
     );
   }
@@ -1368,13 +1572,13 @@ function DraftDetailView({
       <section className="space-y-5 px-5 py-5">
         <CoverArt title={draft.title} summary={draft.summary} coverUrl={draft.coverUrl} />
         <AudioPlayer src={draft.audioUrl} label={draft.title} />
-        <div className="rounded-[8px] border border-[#dfe6df] bg-white p-4 shadow-sm">
-          <h2 className="text-2xl font-semibold text-[#20302d]">{draft.title}</h2>
-          <p className="mt-3 text-sm leading-7 text-[#68736f]">{draft.summary}</p>
+        <div className="healing-card rounded-[8px] p-4">
+          <h2 className="text-2xl font-semibold text-[#3f442f]">{draft.title}</h2>
+          <p className="mt-3 text-sm leading-7 text-[#7a7754]">{draft.summary}</p>
         </div>
-        <div className="rounded-[8px] border border-[#dfe6df] bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-[#20302d]">完整日记</h3>
-          <p className="mt-3 whitespace-pre-wrap text-[15px] leading-8 text-[#394a46]">
+        <div className="healing-card rounded-[8px] p-4">
+          <h3 className="text-sm font-semibold text-[#3f442f]">完整日记</h3>
+          <p className="mt-3 whitespace-pre-wrap text-[15px] leading-8 text-[#4d5038]">
             {draft.fullDiary}
           </p>
         </div>
@@ -1382,7 +1586,7 @@ function DraftDetailView({
           type="button"
           onClick={saveCurrentDraft}
           disabled={isSavingDraft}
-          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#263d3a] px-4 text-sm font-medium text-white disabled:bg-[#aeb8b2]"
+          className="healing-primary inline-flex h-12 w-full items-center justify-center gap-2 rounded-full px-4 text-sm font-medium disabled:bg-[#b9b58e]"
         >
           {isSavingDraft ? <LoaderCircle size={16} className="animate-spin" /> : <Save size={16} />}
           保存当前版本
@@ -1435,7 +1639,7 @@ function MineView() {
         autoComplete="off"
         aria-label="DeepSeek API Key"
         placeholder="DeepSeek API Key（对话与日记）"
-        className="h-12 w-full rounded-[8px] border border-[#dfe6df] bg-white px-3 text-[15px] text-[#20302d] outline-none transition focus:border-[#8fb3a8]"
+        className="healing-surface h-12 w-full rounded-[8px] px-3 text-[15px] text-[#3f442f] outline-none transition focus:border-[#82b7eb]"
       />
       <input
         value={settings.minimaxApiKey}
@@ -1444,7 +1648,7 @@ function MineView() {
         autoComplete="off"
         aria-label="Minimax API Key"
         placeholder="MiniMax API Key（海螺音乐）"
-        className="h-12 w-full rounded-[8px] border border-[#dfe6df] bg-white px-3 text-[15px] text-[#20302d] outline-none transition focus:border-[#8fb3a8]"
+        className="healing-surface h-12 w-full rounded-[8px] px-3 text-[15px] text-[#3f442f] outline-none transition focus:border-[#82b7eb]"
       />
     </section>
   );
@@ -1452,18 +1656,18 @@ function MineView() {
 
 function BackHeader({ goBack, title }: { goBack: () => void; title: string }) {
   return (
-    <header className="sticky top-0 z-10 border-b border-[#e1e8e1] bg-[#f8faf7]/92 px-4 py-4 backdrop-blur">
+    <header className="sticky top-0 z-10 border-b border-[#7a7754]/12 bg-[#fffff7]/78 px-4 py-4 backdrop-blur-xl">
       <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={goBack}
           aria-label="返回"
           title="返回"
-          className="grid h-10 w-10 place-items-center rounded-full bg-[#e9f0eb] text-[#47615b]"
+          className="healing-blue grid h-10 w-10 place-items-center rounded-full"
         >
           <ChevronLeft size={20} />
         </button>
-        <h1 className="min-w-0 truncate text-lg font-semibold text-[#20302d]">{title}</h1>
+        <h1 className="min-w-0 truncate text-lg font-semibold text-[#3f442f]">{title}</h1>
       </div>
     </header>
   );
@@ -1471,53 +1675,77 @@ function BackHeader({ goBack, title }: { goBack: () => void; title: string }) {
 
 function BottomNav({
   active,
-  goToday,
-  goNotebook,
+  goHome,
+  goDiary,
   goMine,
 }: {
-  active: "today" | "notebook" | "mine";
-  goToday: () => void;
-  goNotebook: () => void;
+  active: "home" | "diary" | "mine";
+  goHome: () => void;
+  goDiary: () => void;
   goMine: () => void;
 }) {
   const itemClass = (target: typeof active) =>
-    `grid h-12 w-12 place-items-center rounded-full transition ${
+    `relative grid h-14 w-full place-items-center rounded-[8px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#82b7eb] ${
       active === target
-        ? "bg-[#263d3a] text-white shadow-sm"
-        : "text-[#52645f] hover:bg-[#eef2ee]"
+        ? "bg-[#f3ff9b]/72 text-[#3f442f] after:absolute after:bottom-1.5 after:h-0.5 after:w-8 after:rounded-full after:bg-[#7a7754]"
+        : "text-[#7a7754] hover:bg-[#82b7eb]/12"
     }`;
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-20 px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-2">
-      <div className="mx-auto flex w-fit items-center gap-2 rounded-full border border-[#dfe6df] bg-white/94 p-2 shadow-[0_14px_34px_rgba(50,70,65,0.16)] backdrop-blur">
+    <nav className="fixed inset-x-0 bottom-0 z-20 mx-auto w-full max-w-md border-t border-[#7a7754]/14 bg-[#fffff7]/96 px-5 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2 backdrop-blur">
+      <div className="grid w-full grid-cols-3 items-center gap-3">
         <button
           type="button"
-          onClick={goToday}
-          aria-label="写日记"
-          title="写日记"
-          className={itemClass("today")}
+          onClick={goHome}
+          aria-label="首页"
+          title="首页"
+          className={itemClass("home")}
         >
-          <PenLine size={19} />
+          <House size={22} strokeWidth={1.7} />
         </button>
         <button
           type="button"
-          onClick={goNotebook}
+          onClick={goDiary}
           aria-label="日记本"
           title="日记本"
-          className={itemClass("notebook")}
+          className={itemClass("diary")}
         >
-          <BookOpen size={19} />
+          <BookOpen size={22} strokeWidth={1.7} />
         </button>
         <button
           type="button"
           onClick={goMine}
-          aria-label="我的"
-          title="我的"
+          aria-label="个人"
+          title="个人"
           className={itemClass("mine")}
         >
-          <UserRound size={19} />
+          <FoxLineIcon />
         </button>
       </div>
     </nav>
+  );
+}
+
+function FoxLineIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 28 28"
+      className="h-7 w-7"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M7.2 12.1 5.7 5.7l5.2 3.1" />
+      <path d="m20.8 12.1 1.5-6.4-5.2 3.1" />
+      <path d="M6.6 13.1c.8-3 3.5-5.1 7.4-5.1s6.6 2.1 7.4 5.1" />
+      <path d="M6.7 13.2c-.8 4.8 2.5 8.4 7.3 8.4s8.1-3.6 7.3-8.4" />
+      <path d="M10.3 15.2h.1" />
+      <path d="M17.6 15.2h.1" />
+      <path d="M13.1 17.2c.5.4 1.3.4 1.8 0" />
+      <path d="M11 20.6c-1.4.8-2.9.9-4.1.2 1.3-.6 2.1-1.6 2.4-3" />
+    </svg>
   );
 }

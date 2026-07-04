@@ -39,7 +39,7 @@ export function AudioPlayer({ src, label = "今日器乐" }: AudioPlayerProps) {
   const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
 
   return (
-    <div className="rounded-[8px] border border-[#dfe6df] bg-white/82 p-3 shadow-sm">
+    <div className="healing-surface rounded-[8px] p-3">
       <audio
         key={src}
         ref={audioRef}
@@ -61,20 +61,20 @@ export function AudioPlayer({ src, label = "今日器乐" }: AudioPlayerProps) {
           disabled={!src}
           aria-label={isPlaying ? "暂停音乐" : "播放音乐"}
           title={isPlaying ? "暂停音乐" : "播放音乐"}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#263d3a] text-white transition hover:bg-[#1b2d2b] disabled:cursor-not-allowed disabled:bg-[#aeb8b2]"
+          className="healing-primary grid h-11 w-11 shrink-0 place-items-center rounded-full transition disabled:cursor-not-allowed disabled:bg-[#b9b58e]"
         >
           {isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
         </button>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-3 text-xs text-[#68736f]">
-            <span className="truncate font-medium text-[#263d3a]">{label}</span>
+          <div className="flex items-center justify-between gap-3 text-xs text-[#7a7754]">
+            <span className="truncate font-medium text-[#3f442f]">{label}</span>
             <span className="shrink-0 tabular-nums">
               {formatTime(currentTime)} / {formatTime(duration)}
             </span>
           </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#dfe6df]">
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#7a7754]/15">
             <div
-              className="h-full rounded-full bg-[#d47d6a] transition-[width]"
+              className="h-full rounded-full bg-[#82b7eb] transition-[width]"
               style={{ width: `${progress}%` }}
             />
           </div>
