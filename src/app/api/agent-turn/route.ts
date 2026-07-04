@@ -42,15 +42,18 @@ export async function POST(request: Request) {
               type: "meta",
               action: result.action,
               collected: result.collected,
+              readyToGenerate: result.readyToGenerate,
+              replyCount: result.replyCount,
             })}\n`,
           ),
         );
 
-        for (const chunk of chunkText(result.message)) {
+        const text = result.segments.join("").trim();
+        for (const chunk of chunkText(text)) {
           controller.enqueue(
             encoder.encode(`${JSON.stringify({ type: "delta", text: chunk })}\n`),
           );
-          await sleep(26);
+          await sleep(8);
         }
 
         controller.enqueue(encoder.encode(`${JSON.stringify({ type: "done" })}\n`));

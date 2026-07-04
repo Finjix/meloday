@@ -47,11 +47,18 @@ const generationStages = [
   "准备器乐和封面",
 ];
 
+const agentAvatarEmojis = ["🙂", "😊", "😌", "😉", "🤗", "😴", "🐱", "🐶", "🐰", "🐻", "🐼", "🦊"];
+
 function makeId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return `${prefix}_${crypto.randomUUID()}`;
   }
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+}
+
+function randomAgentAvatarEmoji() {
+  const index = Math.floor(Math.random() * agentAvatarEmojis.length);
+  return agentAvatarEmojis[index] ?? "🙂";
 }
 
 function createMessage(role: ChatMessage["role"], content: string): ChatMessage {
@@ -72,8 +79,146 @@ function initialMessages() {
   ];
 }
 
+function materializeConversation(
+  messages: ChatMessage[],
+  fullAgentReplies: Record<string, string>,
+) {
+  return messages.map((message) =>
+    message.role === "agent" && fullAgentReplies[message.id]
+      ? { ...message, content: fullAgentReplies[message.id] }
+      : message,
+  );
+}
+
+function formatDebugConversation(
+  messages: ChatMessage[],
+  fullAgentReplies: Record<string, string> = {},
+) {
+  return materializeConversation(messages, fullAgentReplies)
+    .filter((message) => message.content.trim())
+    .map((message) => {
+      const role = message.role === "user" ? "用户" : "Meloday";
+      return `${role}：${message.content.trim()}`;
+    })
+    .join("\n\n");
+}
+
+function normalizeForRepeatCheck(text: string) {
+  return text.replace(/\s+/g, "").replace(/[。！？!?；;，,、…]/g, "");
+}
+
+function repeatsRecentAgentReply(
+  text: string,
+  messages: ChatMessage[],
+  fullAgentReplies: Record<string, string>,
+) {
+  const normalizedText = normalizeForRepeatCheck(text);
+  if (!normalizedText) return false;
+
+  return materializeConversation(messages, fullAgentReplies)
+    .filter((message) => message.role === "agent")
+    .map((message) => message.content.trim())
+    .filter(Boolean)
+    .slice(-3)
+    .some((messageText) => normalizeForRepeatCheck(messageText) === normalizedText);
+}
+
+async function copyTextToClipboard(text: string) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall through to the textarea fallback when browser clipboard permission is blocked.
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function chunkText(text: string) {
+  const chunks: string[] = [];
+  for (let index = 0; index < text.length; index += 4) {
+    chunks.push(text.slice(index, index + 4));
+  }
+  return chunks;
+}
+
+type DisplayPart = {
+  text: string;
+  delayBeforeMs: number;
+};
+
+function splitLongReplyForDisplay(text: string): DisplayPart[] {
+  const normalizedText = text.replace(/\s+/g, " ").trim();
+  if (!normalizedText) return [];
+
+  const displayUnits: string[] = [];
+  let current = "";
+  let commaCount = 0;
+
+  for (const char of normalizedText) {
+    current += char;
+
+    if (char === "，") {
+      commaCount += 1;
+      if (commaCount >= 2) {
+        displayUnits.push(current.trim());
+        current = "";
+        commaCount = 0;
+      }
+      continue;
+    }
+
+    if (/。|！|？|!|\?|；|;|…/.test(char)) {
+      displayUnits.push(current.trim());
+      current = "";
+      commaCount = 0;
+      continue;
+    }
+  }
+
+  if (current.trim()) {
+    displayUnits.push(current.trim());
+  }
+
+  const isQuestionUnit = (unit: string) => /[？?]\s*$/.test(unit);
+  const normalizedSentences = displayUnits.filter(Boolean).reduce<string[]>((units, unit) => {
+    const previous = units.at(-1);
+    if (previous && isQuestionUnit(previous) && isQuestionUnit(unit)) {
+      units[units.length - 1] = `${previous}${unit}`;
+      return units;
+    }
+
+    units.push(unit);
+    return units;
+  }, []);
+
+  const lastUnit = normalizedSentences.at(-1) ?? "";
+  if (normalizedSentences.length > 1 && isQuestionUnit(lastUnit)) {
+    return [
+      { text: normalizedSentences.slice(0, -1).join(""), delayBeforeMs: 0 },
+      { text: lastUnit, delayBeforeMs: 3000 },
+    ].filter((part) => part.text.trim());
+  }
+
+  const displayTexts = normalizedSentences.length > 3 ? normalizedSentences : [normalizedText];
+  return displayTexts.map((part, index) => ({
+    text: part,
+    delayBeforeMs: index === 0 ? 0 : 2400,
+  }));
 }
 
 function disposeGeneratedCard(card?: GeneratedCard | null) {
@@ -141,6 +286,7 @@ function useEntryMedia(entry?: DiaryEntry) {
 
 export default function Home() {
   const [view, setView] = useState<AppView>({ name: "today" });
+  const [agentAvatarEmoji, setAgentAvatarEmoji] = useState("🙂");
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages());
   const [input, setInput] = useState("");
   const [writtenParagraphs, setWrittenParagraphs] = useState<string[]>([]);
@@ -156,6 +302,9 @@ export default function Home() {
   const [isDraftPreviewOpen, setIsDraftPreviewOpen] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
+  const [debugCopyNotice, setDebugCopyNotice] = useState("");
+  const debugCopyTimerRef = useRef<number | null>(null);
+  const fullAgentRepliesRef = useRef<Record<string, string>>({});
 
   const currentDraft = draftVersions[draftIndex] ?? null;
   const selectedEntry =
@@ -166,9 +315,50 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    setAgentAvatarEmoji(randomAgentAvatarEmoji());
+  }, []);
+
+  useEffect(() => {
     const timer = window.setTimeout(refreshEntries, 0);
     return () => window.clearTimeout(timer);
   }, [refreshEntries]);
+
+  useEffect(() => {
+    async function copyDebugConversation() {
+      const debugText =
+        formatDebugConversation(messages, fullAgentRepliesRef.current) ||
+        "暂无用户和 agent 对话内容。";
+      await copyTextToClipboard(debugText);
+      setDebugCopyNotice("已复制调试信息");
+
+      if (debugCopyTimerRef.current) {
+        window.clearTimeout(debugCopyTimerRef.current);
+      }
+      debugCopyTimerRef.current = window.setTimeout(() => {
+        setDebugCopyNotice("");
+        debugCopyTimerRef.current = null;
+      }, 1600);
+    }
+
+    function handleDebugKeydown(event: KeyboardEvent) {
+      if (event.key !== "5" || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) {
+        return;
+      }
+
+      event.preventDefault();
+      copyDebugConversation().catch(() => {
+        setDebugCopyNotice("复制调试信息失败");
+      });
+    }
+
+    window.addEventListener("keydown", handleDebugKeydown);
+    return () => {
+      window.removeEventListener("keydown", handleDebugKeydown);
+      if (debugCopyTimerRef.current) {
+        window.clearTimeout(debugCopyTimerRef.current);
+      }
+    };
+  }, [messages]);
 
   async function runGeneration(conversation: ChatMessage[]) {
     setGeneration({ running: true, stage: 0 });
@@ -225,6 +415,56 @@ export default function Home() {
     }
   }
 
+  async function revealAgentReply(messageId: string, text: string) {
+    const displayParts = splitLongReplyForDisplay(text);
+    fullAgentRepliesRef.current[messageId] = text;
+
+    for (let partIndex = 0; partIndex < displayParts.length; partIndex += 1) {
+      const displayPart = displayParts[partIndex];
+      if (displayPart.delayBeforeMs > 0) {
+        await sleep(displayPart.delayBeforeMs);
+      }
+
+      setMessages((current) =>
+        current.map((message) => (message.id === messageId ? { ...message, content: "" } : message)),
+      );
+
+      for (const chunk of chunkText(displayPart.text)) {
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === messageId
+              ? { ...message, content: `${message.content}${chunk}` }
+              : message,
+          ),
+        );
+        await sleep(32);
+      }
+    }
+  }
+
+  async function requestAgentTurnWithoutVisibleRepeat(
+    conversation: ChatMessage[],
+    userMessage: ChatMessage,
+  ) {
+    let attemptConversation = conversation;
+    let meta = await requestAgentTurn(attemptConversation);
+
+    for (let retryIndex = 0; retryIndex < 2; retryIndex += 1) {
+      if (!repeatsRecentAgentReply(meta.text, messages, fullAgentRepliesRef.current)) {
+        return meta;
+      }
+
+      attemptConversation = [
+        ...attemptConversation,
+        createMessage("agent", meta.text),
+        createMessage("user", userMessage.content),
+      ];
+      meta = await requestAgentTurn(attemptConversation);
+    }
+
+    return meta;
+  }
+
   async function submitMessage() {
     const content = input.trim();
     if (!content || isAgentBusy || generation?.running) return;
@@ -242,7 +482,7 @@ export default function Home() {
     const userMessage = createMessage("user", content);
     const assistantMessage = createMessage("agent", "");
     const conversation = [
-      ...writtenParagraphs.map((paragraph) => createMessage("user", paragraph)),
+      ...materializeConversation(messages, fullAgentRepliesRef.current),
       userMessage,
     ];
 
@@ -252,15 +492,8 @@ export default function Home() {
     setIsAgentBusy(true);
 
     try {
-      const meta = await requestAgentTurn(conversation, (delta) => {
-        setMessages((current) =>
-          current.map((message) =>
-            message.id === assistantMessage.id
-              ? { ...message, content: `${message.content}${delta}` }
-              : message,
-          ),
-        );
-      });
+      const meta = await requestAgentTurnWithoutVisibleRepeat(conversation, userMessage);
+      await revealAgentReply(assistantMessage.id, meta.text);
 
       setIsAgentBusy(false);
 
@@ -299,6 +532,7 @@ export default function Home() {
       setDraftVersions([]);
       setDraftIndex(0);
       setInput("");
+      fullAgentRepliesRef.current = {};
       setMessages(initialMessages());
       setWrittenParagraphs([]);
       setHasStartedWriting(false);
@@ -315,6 +549,7 @@ export default function Home() {
     setDraftIndex(0);
     setIsDraftPreviewOpen(false);
     setInput("");
+    fullAgentRepliesRef.current = {};
     setMessages(initialMessages());
     setWrittenParagraphs([]);
     setHasStartedWriting(false);
@@ -348,7 +583,9 @@ export default function Home() {
               setInput={setInput}
               submitMessage={submitMessage}
               generation={generation}
-              retryGeneration={() => runGeneration(messages)}
+              retryGeneration={() =>
+                runGeneration(materializeConversation(messages, fullAgentRepliesRef.current))
+              }
               draft={currentDraft}
               isDraftPreviewOpen={isDraftPreviewOpen}
               openDraftPreview={() => setIsDraftPreviewOpen(true)}
@@ -358,6 +595,7 @@ export default function Home() {
                 setView({ name: "draft-detail" });
               }}
               resetToday={resetToday}
+              agentAvatarEmoji={agentAvatarEmoji}
             />
           ) : null}
 
@@ -413,6 +651,7 @@ export default function Home() {
             setView({ name: "mine" });
           }}
         />
+        {debugCopyNotice ? <DebugCopyToast message={debugCopyNotice} /> : null}
       </div>
     </main>
   );
@@ -439,6 +678,7 @@ function TodayView({
   closeDraftPreview,
   openDraftDetail,
   resetToday,
+  agentAvatarEmoji,
 }: {
   messages: ChatMessage[];
   input: string;
@@ -455,6 +695,7 @@ function TodayView({
   closeDraftPreview: () => void;
   openDraftDetail: () => void;
   resetToday: () => void;
+  agentAvatarEmoji: string;
 }) {
   const latestAgentMessage = [...messages]
     .reverse()
@@ -496,7 +737,11 @@ function TodayView({
         <section className="absolute inset-x-0 top-0 z-20 px-5 pt-5">
           <div className="space-y-4">
             {latestAgentMessage ? (
-              <ChatBubble message={latestAgentMessage} loading={isGenerating} />
+              <ChatBubble
+                message={latestAgentMessage}
+                loading={isGenerating}
+                agentAvatarEmoji={agentAvatarEmoji}
+              />
             ) : null}
           </div>
         </section>
@@ -580,7 +825,15 @@ function TodayView({
   );
 }
 
-function ChatBubble({ message, loading = false }: { message: ChatMessage; loading?: boolean }) {
+function ChatBubble({
+  message,
+  loading = false,
+  agentAvatarEmoji,
+}: {
+  message: ChatMessage;
+  loading?: boolean;
+  agentAvatarEmoji: string;
+}) {
   const isUser = message.role === "user";
 
   return (
@@ -588,7 +841,7 @@ function ChatBubble({ message, loading = false }: { message: ChatMessage; loadin
       {!isUser ? (
         <div className="mr-2 grid min-h-14 w-14 shrink-0 items-start justify-items-center">
           <div className="grid h-14 w-14 place-items-center rounded-full bg-white text-2xl shadow-sm ring-1 ring-[#dfe6df]">
-            🌙
+            {agentAvatarEmoji}
           </div>
         </div>
       ) : null}
@@ -649,6 +902,16 @@ function GenerationErrorToast({
             重新讲
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DebugCopyToast({ message }: { message: string }) {
+  return (
+    <div className="pointer-events-none fixed inset-x-0 top-6 z-50 px-5">
+      <div className="mx-auto w-fit rounded-full bg-[#263d3a] px-4 py-2 text-sm font-medium text-white shadow-[0_12px_30px_rgba(32,48,45,0.22)]">
+        {message}
       </div>
     </div>
   );

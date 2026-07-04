@@ -11,12 +11,16 @@ export type CollectedSignals = {
   event: boolean;
   emotion: boolean;
   need: boolean;
+  musicDirection: boolean;
+  details: boolean;
 };
 
 export type AgentTurnResult = {
   action: "question" | "generate";
-  message: string;
+  segments: string[];
   collected: CollectedSignals;
+  readyToGenerate: boolean;
+  replyCount: number;
 };
 
 export type CoverMeta = {
@@ -69,6 +73,8 @@ export type DiaryEntry = {
 export type AgentStreamMeta = {
   action: AgentTurnResult["action"];
   collected: CollectedSignals;
+  readyToGenerate: boolean;
+  replyCount: number;
 };
 
 export type AgentStreamLine =
