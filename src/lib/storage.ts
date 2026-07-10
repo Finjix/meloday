@@ -123,6 +123,8 @@ export function renameEntry(entryId: string, title: string) {
 
 export async function deleteEntry(entry: DiaryEntry) {
   writeEntries(readEntriesRaw().filter((item) => item.id !== entry.id));
-  await deleteMediaBlob(entry.audioBlobId);
-  await deleteMediaBlob(entry.coverBlobId);
+  await Promise.all([
+    entry.audioBlobId ? deleteMediaBlob(entry.audioBlobId) : Promise.resolve(),
+    entry.coverBlobId ? deleteMediaBlob(entry.coverBlobId) : Promise.resolve(),
+  ]);
 }
