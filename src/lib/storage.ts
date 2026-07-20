@@ -1,5 +1,5 @@
 import { openDB } from "idb";
-import type { DiaryEntry, GeneratedCard } from "@/lib/types";
+import type { DiaryEntry, DiarySource, GeneratedCard } from "@/lib/types";
 
 const entriesKey = "meloday.entries.v1";
 const dbName = "meloday-media-v1";
@@ -40,6 +40,24 @@ async function getDb() {
   });
 }
 
+function localDateKey(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
+function makeEntryId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return "entry_" + crypto.randomUUID();
+  }
+  return "entry_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+}
+
 export function loadDiaryEntries() {
   return readEntriesRaw().sort(
     (left, right) =>
@@ -62,7 +80,7 @@ export async function deleteMediaBlob(id: string) {
   await db.delete(storeName, id);
 }
 
-export async function saveGeneratedCard(card: GeneratedCard) {
+export async function saveGeneratedCard(card: GeneratedCard, source?: DiarySource) {
   const audioBlobId = `${card.id}:audio`;
   const coverBlobId = `${card.id}:cover`;
   await putMediaBlob(audioBlobId, card.audioBlob);
@@ -79,10 +97,56 @@ export async function saveGeneratedCard(card: GeneratedCard) {
     audioBlobId,
     coverBlobId,
     coverMeta: card.coverMeta,
+    source,
+    generationStatus: "ready",
   };
 
   const entries = [entry, ...readEntriesRaw().filter((item) => item.id !== entry.id)];
   writeEntries(entries);
+  return entry;
+}
+
+export function savePendingDiary(source: DiarySource, existingId?: string) {
+  const now = new Date();
+  const entries = readEntriesRaw();
+  const existing = existingId
+    ? entries.find((entry) => entry.id === existingId)
+    : undefined;
+  const content = source.content.trim();
+  const compactContent = content.replace(/\s+/g, " ");
+  const entry: DiaryEntry = {
+    id: existing?.id ?? makeEntryId(),
+    createdAt: existing?.createdAt ?? now.toISOString(),
+    updatedAt: now.toISOString(),
+    date: existing?.date ?? localDateKey(now),
+    title:
+      source.title?.trim() ||
+      existing?.title ||
+      compactContent.slice(0, 18) ||
+      "今天的声音",
+    summary:
+      compactContent.slice(0, 72) ||
+      "这一刻已经被留下。",
+    fullDiary: existing?.fullDiary || content,
+    audioBlobId: existing?.audioBlobId ?? "",
+    coverBlobId: existing?.coverBlobId ?? "",
+    coverMeta: existing?.coverMeta ?? {
+      query: "a quiet personal diary memory",
+      source: "deepseek-generated",
+      description: "一页安静留下的声音日记。",
+      palette: {
+        from: "#edf4ef",
+        via: "#f6f3e8",
+        to: "#dcebe5",
+        accent: "#6f9789",
+      },
+    },
+    source,
+    generationStatus: "audio-pending",
+    favorite: existing?.favorite,
+  };
+
+  writeEntries([entry, ...entries.filter((item) => item.id !== entry.id)]);
   return entry;
 }
 
@@ -101,14 +165,17 @@ export async function updateEntryWithGeneratedCard(entry: DiaryEntry, card: Gene
     audioBlobId,
     coverBlobId,
     coverMeta: card.coverMeta,
+    generationStatus: "ready",
   };
 
   const entries = readEntriesRaw().map((item) =>
     item.id === entry.id ? nextEntry : item,
   );
   writeEntries(entries);
-  await deleteMediaBlob(entry.audioBlobId);
-  await deleteMediaBlob(entry.coverBlobId);
+  await Promise.all([
+    entry.audioBlobId ? deleteMediaBlob(entry.audioBlobId) : Promise.resolve(),
+    entry.coverBlobId ? deleteMediaBlob(entry.coverBlobId) : Promise.resolve(),
+  ]);
   return nextEntry;
 }
 
@@ -121,6 +188,26 @@ export function renameEntry(entryId: string, title: string) {
   writeEntries(entries);
 }
 
+export function setEntryFavorite(entryId: string, favorite: boolean) {
+  const entries = readEntriesRaw().map((entry) =>
+    entry.id === entryId
+      ? { ...entry, favorite, updatedAt: new Date().toISOString() }
+      : entry,
+  );
+  writeEntries(entries);
+}
+
+export function mergeDiaryEntries(imported: DiaryEntry[]) {
+  const importedIds = new Set(imported.map((entry) => entry.id));
+  const merged = [
+    ...imported,
+    ...readEntriesRaw().filter((entry) => !importedIds.has(entry.id)),
+  ].sort(
+    (left, right) =>
+      new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+  );
+  writeEntries(merged);
+}
 export async function deleteEntry(entry: DiaryEntry) {
   writeEntries(readEntriesRaw().filter((item) => item.id !== entry.id));
   await Promise.all([

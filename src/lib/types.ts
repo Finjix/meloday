@@ -6,6 +6,20 @@ export type ChatMessage = {
   content: string;
   createdAt: string;
 };
+export type MomentWeather = {
+  summary: string;
+  temperature: number;
+  updatedAt: string;
+};
+
+export type MomentContext = {
+  localDate: string;
+  localTime: string;
+  timeOfDay: "深夜" | "上午" | "中午" | "下午" | "晚上";
+  timeZone: string;
+  weather?: MomentWeather;
+};
+
 
 export type CollectedSignals = {
   event: boolean;
@@ -57,6 +71,14 @@ export type GeneratedCard = CardPayload & {
   coverUrl: string;
 };
 
+export type DiarySource = {
+  kind: "conversation" | "written";
+  title?: string;
+  content: string;
+  mood?: string;
+  reply?: string;
+};
+
 export type DiaryEntry = {
   id: string;
   createdAt: string;
@@ -68,6 +90,9 @@ export type DiaryEntry = {
   audioBlobId: string;
   coverBlobId: string;
   coverMeta: CoverMeta;
+  source?: DiarySource;
+  generationStatus?: "ready" | "audio-pending";
+  favorite?: boolean;
 };
 
 export type AgentStreamMeta = {
@@ -85,4 +110,18 @@ export type AgentStreamLine =
 export type ApiKeys = {
   deepseekApiKey?: string;
   minimaxApiKey?: string;
+};
+
+export type CompanionPreferences = {
+  nickname: string;
+  replyStyle: "gentle" | "concise" | "direct";
+  soundStyle: "warm" | "clear" | "deep";
+  autoPlayEntry: boolean;
+};
+
+export type CompanionMemory = {
+  id: string;
+  text: string;
+  useInResponses: boolean;
+  createdAt: string;
 };

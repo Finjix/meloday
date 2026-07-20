@@ -1,4 +1,4 @@
-import type { ApiKeys, ChatMessage } from "@/lib/types";
+import type { ApiKeys, ChatMessage, CompanionPreferences, MomentContext } from "@/lib/types";
 import { generateAgentTurn, ServiceConfigError } from "@/lib/server/deepseek";
 
 
@@ -24,9 +24,21 @@ function errorResponse(error: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { messages?: ChatMessage[]; apiKeys?: ApiKeys };
+    const body = (await request.json()) as {
+      messages?: ChatMessage[];
+      apiKeys?: ApiKeys;
+      preferences?: CompanionPreferences;
+      momentContext?: MomentContext;
+      memories?: string[];
+    };
     const messages = Array.isArray(body.messages) ? body.messages : [];
-    const result = await generateAgentTurn(messages, body.apiKeys);
+    const result = await generateAgentTurn(
+      messages,
+      body.apiKeys,
+      body.preferences,
+      body.momentContext,
+      body.memories,
+    );
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({

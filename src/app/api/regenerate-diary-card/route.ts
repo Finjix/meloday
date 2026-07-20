@@ -1,4 +1,4 @@
-import type { ApiKeys, CardPayload } from "@/lib/types";
+import type { ApiKeys, CardPayload, CompanionPreferences, MomentContext } from "@/lib/types";
 import {
   assembleCardPayload,
   regenerateCardContent,
@@ -21,6 +21,9 @@ export async function POST(request: Request) {
       card?: CardPayload;
       feedback?: string;
       apiKeys?: ApiKeys;
+      preferences?: CompanionPreferences;
+      momentContext?: MomentContext;
+      memories?: string[];
     };
 
     if (!body.card || !body.feedback?.trim()) {
@@ -28,7 +31,14 @@ export async function POST(request: Request) {
     }
 
     assertMiniMaxApiKey(body.apiKeys);
-    const content = await regenerateCardContent(body.card, body.feedback, body.apiKeys);
+    const content = await regenerateCardContent(
+      body.card,
+      body.feedback,
+      body.apiKeys,
+      body.preferences,
+      body.momentContext,
+      body.memories,
+    );
     const audio = await generateInstrumentalMusic(content.musicPrompt, body.apiKeys);
     return Response.json(
       assembleCardPayload(content, audio, {

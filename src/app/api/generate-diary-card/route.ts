@@ -1,4 +1,4 @@
-import type { ApiKeys, ChatMessage } from "@/lib/types";
+import type { ApiKeys, ChatMessage, CompanionPreferences, MomentContext } from "@/lib/types";
 import {
   assembleCardPayload,
   generateCardContent,
@@ -17,10 +17,22 @@ function errorResponse(error: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { messages?: ChatMessage[]; apiKeys?: ApiKeys };
+    const body = (await request.json()) as {
+      messages?: ChatMessage[];
+      apiKeys?: ApiKeys;
+      preferences?: CompanionPreferences;
+      momentContext?: MomentContext;
+      memories?: string[];
+    };
     const messages = Array.isArray(body.messages) ? body.messages : [];
     assertMiniMaxApiKey(body.apiKeys);
-    const content = await generateCardContent(messages, body.apiKeys);
+    const content = await generateCardContent(
+      messages,
+      body.apiKeys,
+      body.preferences,
+      body.momentContext,
+      body.memories,
+    );
     const audio = await generateInstrumentalMusic(content.musicPrompt, body.apiKeys);
     return Response.json(assembleCardPayload(content, audio), {
       headers: { "Cache-Control": "no-store" },

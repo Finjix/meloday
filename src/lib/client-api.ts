@@ -7,8 +7,16 @@ import type {
   GeneratedCard,
 } from "@/lib/types";
 import { createCoverBlob } from "@/lib/media";
+import { getMomentContext } from "@/lib/moment-context";
+import { companionMemoriesForResponses } from "@/lib/memories";
+import { loadCompanionPreferences } from "@/lib/preferences";
 
 const apiSettingsStorageKey = "meloday.api-settings.v1";
+
+export type ServiceAvailability = {
+  conversation: "included" | "device" | "missing";
+  sound: "included" | "device" | "missing";
+};
 
 function readApiKeys(): ApiKeys | undefined {
   if (typeof window === "undefined") return undefined;
@@ -24,6 +32,40 @@ function readApiKeys(): ApiKeys | undefined {
   } catch {
     return undefined;
   }
+}
+
+export async function requestServiceAvailability(): Promise<ServiceAvailability> {
+  const localKeys = readApiKeys();
+  let included = { conversation: false, sound: false };
+
+  try {
+    const response = await fetch("/api/service-status", { cache: "no-store" });
+    if (response.ok) {
+      const body = (await response.json()) as {
+        conversation?: boolean;
+        sound?: boolean;
+      };
+      included = {
+        conversation: body.conversation === true,
+        sound: body.sound === true,
+      };
+    }
+  } catch {
+    // Local device connections can still be used while status lookup is unavailable.
+  }
+
+  return {
+    conversation: included.conversation
+      ? "included"
+      : localKeys?.deepseekApiKey
+        ? "device"
+        : "missing",
+    sound: included.sound
+      ? "included"
+      : localKeys?.minimaxApiKey
+        ? "device"
+        : "missing",
+  };
 }
 
 function hexToBlob(hex: string, mimeType: string) {
@@ -77,7 +119,13 @@ export async function requestAgentTurn(messages: ChatMessage[]) {
   const response = await fetch("/api/agent-turn", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, apiKeys: readApiKeys() }),
+    body: JSON.stringify({
+      messages,
+      apiKeys: readApiKeys(),
+      preferences: loadCompanionPreferences(),
+      momentContext: getMomentContext(),
+      memories: companionMemoriesForResponses(),
+    }),
   });
 
   if (!response.ok) {
@@ -143,7 +191,13 @@ export async function requestCardGeneration(messages: ChatMessage[]) {
   const response = await fetch("/api/generate-diary-card", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, apiKeys: readApiKeys() }),
+    body: JSON.stringify({
+      messages,
+      apiKeys: readApiKeys(),
+      preferences: loadCompanionPreferences(),
+      momentContext: getMomentContext(),
+      memories: companionMemoriesForResponses(),
+    }),
   });
 
   if (!response.ok) {
@@ -157,7 +211,14 @@ export async function requestCardRegeneration(card: CardPayload, feedback: strin
   const response = await fetch("/api/regenerate-diary-card", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ card, feedback, apiKeys: readApiKeys() }),
+    body: JSON.stringify({
+      card,
+      feedback,
+      apiKeys: readApiKeys(),
+      preferences: loadCompanionPreferences(),
+      momentContext: getMomentContext(),
+      memories: companionMemoriesForResponses(),
+    }),
   });
 
   if (!response.ok) {

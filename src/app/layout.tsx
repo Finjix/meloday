@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./diary-hub.css";
+import "./experience.css";
 
 export const metadata: Metadata = {
   title: "Meloday",

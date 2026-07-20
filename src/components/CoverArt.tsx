@@ -23,7 +23,7 @@ export function CoverArt({ title, summary, coverUrl, compact = false }: CoverArt
     >
       <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,247,0)_36%,rgba(47,51,40,0.66)_100%)]" />
       <div className="absolute inset-x-0 bottom-0 p-4 text-white">
-        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#f3ff9b]">
+        <p className="text-[13px] font-medium tracking-[0.08em] text-[#f3ff9b]">
           Meloday
         </p>
         <h3
