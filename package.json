@@ -6,7 +6,8 @@
     "dev": "next dev -p 6670",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --test src/lib/conversation.test.ts src/lib/memories.test.ts src/lib/moment-context.test.ts src/lib/storage.test.ts"
   },
   "dependencies": {
     "@ai-sdk/deepseek": "^3.0.1",

@@ -1,64 +1,104 @@
 "use client";
 
 import {
+  ArrowUp,
   BookOpen,
+  Footprints,
   Check,
+  CloudSun,
   ChevronLeft,
+  Heart,
+  House,
   LoaderCircle,
   Maximize2,
-  Music2,
+  Mic,
   Pause,
   PenLine,
   Play,
+  Radio,
   RefreshCw,
   Save,
+  Search,
+  Sparkles,
   Trash2,
   UserRound,
+  Waves,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { CoverArt } from "@/components/CoverArt";
+import { MineView } from "@/components/MineView";
+import { SpokenReplyButton } from "@/components/SpokenReplyButton";
+import { MeditationModeView, MovementModeView, RestModeView } from "@/components/WellnessModes";
 import {
   requestAgentTurn,
   requestCardGeneration,
   requestCardRegeneration,
+  requestServiceAvailability,
+  type ServiceAvailability,
 } from "@/lib/client-api";
+import { hasConversationHistory, loadConversation, saveConversation } from "@/lib/conversation";
 import {
   deleteEntry,
   getMediaBlob,
   loadDiaryEntries,
   renameEntry,
   saveGeneratedCard,
+  savePendingDiary,
+  setEntryFavorite,
+  updateEntryWithGeneratedCard,
 } from "@/lib/storage";
-import type { ChatMessage, DiaryEntry, GeneratedCard } from "@/lib/types";
+import {
+  defaultCompanionPreferences,
+  loadCompanionPreferences,
+  saveCompanionPreferences,
+} from "@/lib/preferences";
+import { getMomentContext, refreshMomentWeather } from "@/lib/moment-context";
+import type {
+  ChatMessage,
+  CompanionPreferences,
+  DiaryEntry,
+  DiarySource,
+  GeneratedCard,
+  MomentContext,
+} from "@/lib/types";
+
+type ModeKey = "meditate" | "sleep" | "move";
+
+type DiaryComposeInput = {
+  title: string;
+  content: string;
+  mood: string;
+};
+
+type DiaryAudioProgress = {
+  status: "replying" | "rendering" | "ready" | "error";
+  input: DiaryComposeInput;
+  reply?: string;
+  entryId?: string;
+  title?: string;
+  error?: string;
+};
 
 type AppView =
+  | { name: "home" }
+  | { name: "mode"; mode: ModeKey }
+  | { name: "diary" }
+  | { name: "compose-diary" }
+  | { name: "diary-audio" }
   | { name: "today" }
   | { name: "notebook" }
-  | { name: "mine" }
-  | { name: "entry"; id: string }
+  | { name: "mine"; panel?: "services" }
+  | { name: "entry"; id: string; returnTo?: "diary" | "mine" | "home" }
   | { name: "draft-detail" };
-
-const generationStages = [
-  "整理今天的片段",
-  "听见情绪里的需要",
-  "写下音乐日记",
-  "准备器乐和封面",
-];
-
-const agentAvatarEmojis = ["🙂", "😊", "😌", "😉", "🤗", "😴", "🐱", "🐶", "🐰", "🐻", "🐼", "🦊"];
 
 function makeId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return `${prefix}_${crypto.randomUUID()}`;
   }
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-}
-
-function randomAgentAvatarEmoji() {
-  const index = Math.floor(Math.random() * agentAvatarEmojis.length);
-  return agentAvatarEmojis[index] ?? "🙂";
 }
 
 function createMessage(role: ChatMessage["role"], content: string): ChatMessage {
@@ -74,7 +114,7 @@ function initialMessages() {
   return [
     createMessage(
       "agent",
-      "你好呀，有什么想和我说的！",
+      "现在的你是什么感觉？说一句就好，我会从这里为你写一段声音。",
     ),
   ];
 }
@@ -88,6 +128,24 @@ function materializeConversation(
       ? { ...message, content: fullAgentReplies[message.id] }
       : message,
   );
+}
+
+function buildConversationSource(
+  messages: ChatMessage[],
+  fullAgentReplies: Record<string, string>,
+): DiarySource | undefined {
+  const conversation = materializeConversation(messages, fullAgentReplies);
+  const content = conversation
+    .filter((message) => message.role === "user")
+    .map((message) => message.content.trim())
+    .filter(Boolean)
+    .join("\n\n");
+  if (!content) return undefined;
+
+  const reply = [...conversation]
+    .reverse()
+    .find((message) => message.role === "agent" && message.content.trim())?.content.trim();
+  return { kind: "conversation", content, reply };
 }
 
 function formatDebugConversation(
@@ -285,16 +343,13 @@ function useEntryMedia(entry?: DiaryEntry) {
 }
 
 export default function Home() {
-  const [view, setView] = useState<AppView>({ name: "today" });
-  const [agentAvatarEmoji, setAgentAvatarEmoji] = useState("🙂");
+  const [view, setView] = useState<AppView>({ name: "home" });
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages());
+  const [conversationReady, setConversationReady] = useState(false);
   const [input, setInput] = useState("");
-  const [writtenParagraphs, setWrittenParagraphs] = useState<string[]>([]);
-  const [hasStartedWriting, setHasStartedWriting] = useState(false);
   const [isAgentBusy, setIsAgentBusy] = useState(false);
   const [generation, setGeneration] = useState<{
     running: boolean;
-    stage: number;
     error?: string;
   } | null>(null);
   const [draftVersions, setDraftVersions] = useState<GeneratedCard[]>([]);
@@ -302,6 +357,14 @@ export default function Home() {
   const [isDraftPreviewOpen, setIsDraftPreviewOpen] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
+  const [companionPreferences, setCompanionPreferences] =
+    useState<CompanionPreferences>(defaultCompanionPreferences);
+  const [serviceAvailability, setServiceAvailability] =
+    useState<ServiceAvailability | null>(null);
+  const [momentContext, setMomentContext] = useState<MomentContext | null>(null);
+  const [weatherBusy, setWeatherBusy] = useState(false);
+  const [weatherNotice, setWeatherNotice] = useState("");
+  const [diaryAudioProgress, setDiaryAudioProgress] = useState<DiaryAudioProgress | null>(null);
   const [debugCopyNotice, setDebugCopyNotice] = useState("");
   const debugCopyTimerRef = useRef<number | null>(null);
   const fullAgentRepliesRef = useRef<Record<string, string>>({});
@@ -309,25 +372,67 @@ export default function Home() {
   const currentDraft = draftVersions[draftIndex] ?? null;
   const selectedEntry =
     view.name === "entry" ? entries.find((entry) => entry.id === view.id) : undefined;
+  const revisitEntry =
+    entries.find((entry) => entry.favorite) ??
+    entries.at(-1) ??
+    entries[0];
 
   const refreshEntries = useCallback(() => {
     setEntries(loadDiaryEntries());
   }, []);
 
+  const refreshServiceAvailability = useCallback(async () => {
+    setServiceAvailability(await requestServiceAvailability());
+  }, []);
+
+  async function handleWeatherRefresh() {
+    if (weatherBusy) return;
+    setWeatherBusy(true);
+    setWeatherNotice("");
+    try {
+      await refreshMomentWeather();
+      setMomentContext(getMomentContext());
+    } catch (error) {
+      setWeatherNotice(
+        error instanceof Error ? error.message : "天气暂时没有更新，可以稍后再试。",
+      );
+    } finally {
+      setWeatherBusy(false);
+    }
+  }
+
   useEffect(() => {
-    setAgentAvatarEmoji(randomAgentAvatarEmoji());
+    const timer = window.setTimeout(() => {
+      refreshEntries();
+      setCompanionPreferences(loadCompanionPreferences());
+      void refreshServiceAvailability();
+      setMomentContext(getMomentContext());
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [refreshEntries, refreshServiceAvailability]);
+
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const savedConversation = loadConversation();
+      if (savedConversation.length) setMessages(savedConversation);
+      setConversationReady(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(refreshEntries, 0);
+    if (!conversationReady) return;
+    const timer = window.setTimeout(() => {
+      saveConversation(materializeConversation(messages, fullAgentRepliesRef.current));
+    }, 180);
     return () => window.clearTimeout(timer);
-  }, [refreshEntries]);
-
+  }, [conversationReady, messages]);
   useEffect(() => {
     async function copyDebugConversation() {
       const debugText =
         formatDebugConversation(messages, fullAgentRepliesRef.current) ||
-        "暂无用户和 agent 对话内容。";
+        "暂无对话内容。";
       await copyTextToClipboard(debugText);
       setDebugCopyNotice("已复制调试信息");
 
@@ -361,16 +466,19 @@ export default function Home() {
   }, [messages]);
 
   async function runGeneration(conversation: ChatMessage[]) {
-    setGeneration({ running: true, stage: 0 });
+    if (serviceAvailability?.sound === "missing") {
+      setView({ name: "today" });
+      setGeneration({
+        running: false,
+        error: "完成声音连接后，这段对话就可以继续变成一段声音。",
+      });
+      return;
+    }
+
+    setGeneration({ running: true });
     setView({ name: "today" });
 
     try {
-      for (let index = 0; index < generationStages.length - 1; index += 1) {
-        setGeneration({ running: true, stage: index });
-        await sleep(520);
-      }
-
-      setGeneration({ running: true, stage: generationStages.length - 1 });
       const card = await requestCardGeneration(conversation);
       draftVersions.forEach(disposeGeneratedCard);
       setDraftVersions([card]);
@@ -381,24 +489,26 @@ export default function Home() {
       console.error(error);
       setGeneration({
         running: false,
-        stage: generationStages.length - 1,
-        error: `生成时出了点问题。对话还在，可以再试一次。${error instanceof Error ? `（${error.message}）` : ""}`,
+        error: "声音暂时没有完成，对话已经留着，可以稍后再试。",
       });
     }
   }
 
   async function runRegenerationFromMain(card: GeneratedCard, feedback: string) {
-    setGeneration({ running: true, stage: 0 });
+    if (serviceAvailability?.sound === "missing") {
+      setView({ name: "today" });
+      setGeneration({
+        running: false,
+        error: "完成声音连接后，就可以继续调整这一段声音。",
+      });
+      return;
+    }
+
+    setGeneration({ running: true });
     setIsDraftPreviewOpen(false);
     setView({ name: "today" });
 
     try {
-      for (let index = 0; index < generationStages.length - 1; index += 1) {
-        setGeneration({ running: true, stage: index });
-        await sleep(520);
-      }
-
-      setGeneration({ running: true, stage: generationStages.length - 1 });
       const nextCard = await requestCardRegeneration(card, feedback);
       draftVersions.forEach(disposeGeneratedCard);
       setDraftVersions([nextCard]);
@@ -409,8 +519,7 @@ export default function Home() {
       console.error(error);
       setGeneration({
         running: false,
-        stage: generationStages.length - 1,
-        error: `重新生成时出了点问题。你可以再试一次。${error instanceof Error ? `（${error.message}）` : ""}`,
+        error: "这次调整暂时没有完成，原来的声音还在。",
       });
     }
   }
@@ -465,13 +574,17 @@ export default function Home() {
     return meta;
   }
 
-  async function submitMessage() {
-    const content = input.trim();
+  async function submitMessage(contentOverride?: string) {
+    const content = (contentOverride ?? input).trim();
     if (!content || isAgentBusy || generation?.running) return;
+    if (serviceAvailability?.conversation === "missing") {
+      setView({ name: "mine", panel: "services" });
+      return;
+    }
 
     if (currentDraft) {
       const userMessage = createMessage("user", content);
-      const assistantMessage = createMessage("agent", "正在为您创作");
+      const assistantMessage = createMessage("agent", "好，我按你说的再靠近一点。");
 
       setInput("");
       setMessages((current) => [...current, userMessage, assistantMessage]);
@@ -487,7 +600,6 @@ export default function Home() {
     ];
 
     setInput("");
-    setWrittenParagraphs((current) => [...current, content]);
     setMessages([...conversation, assistantMessage]);
     setIsAgentBusy(true);
 
@@ -498,22 +610,16 @@ export default function Home() {
       setIsAgentBusy(false);
 
       if (meta.action === "generate") {
-        setMessages((current) =>
-          current.map((message) =>
-            message.id === assistantMessage.id
-              ? { ...message, content: "正在为您创作" }
-              : message,
-          ),
-        );
         await runGeneration(conversation);
       }
     } catch (error) {
+      console.error(error);
       setMessages((current) =>
         current.map((message) =>
           message.id === assistantMessage.id
             ? {
                 ...message,
-                content: `生成回复时出了点问题。${error instanceof Error ? error.message : "请稍后再试。"}`,
+                content: "刚才那句话没有顺利传回来。你的内容还在，可以再发一次。",
               }
             : message,
         ),
@@ -527,19 +633,109 @@ export default function Home() {
     setIsSavingDraft(true);
 
     try {
-      const entry = await saveGeneratedCard(currentDraft);
+      const source = buildConversationSource(messages, fullAgentRepliesRef.current);
+      const entry = await saveGeneratedCard(currentDraft, source);
       draftVersions.forEach(disposeGeneratedCard);
       setDraftVersions([]);
       setDraftIndex(0);
       setInput("");
       fullAgentRepliesRef.current = {};
       setMessages(initialMessages());
-      setWrittenParagraphs([]);
-      setHasStartedWriting(false);
       refreshEntries();
       setView({ name: "entry", id: entry.id });
     } finally {
       setIsSavingDraft(false);
+    }
+  }
+
+  async function createAudioDiaryFromComposer(
+    input: DiaryComposeInput,
+    existingEntryId?: string,
+    existingReply?: string,
+  ) {
+    const title = input.title.trim();
+    const diaryMessage = [
+      "我写了一篇日记，想把它做成一段专属声音日记。",
+      "请先自然地回应其中的感受，不需要提问；随后基于这段内容生成声音日记。",
+      title ? "日记标题：" + title : "",
+      "此刻心情：" + input.mood,
+      "日记内容：",
+      input.content.trim(),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    const userMessage = createMessage("user", diaryMessage);
+    let reply = existingReply?.trim() ?? "";
+    let card: GeneratedCard | undefined;
+
+    setDiaryAudioProgress({
+      status: reply ? "rendering" : "replying",
+      input,
+      reply: reply || undefined,
+      entryId: existingEntryId,
+    });
+    setView({ name: "diary-audio" });
+
+    try {
+      if (!reply) {
+        const response = await requestAgentTurn([userMessage]);
+        reply = response.text.trim() || "我已经读到了你的这段心情。";
+      }
+      setDiaryAudioProgress({
+        status: "rendering",
+        input,
+        reply,
+        entryId: existingEntryId,
+      });
+
+      card = await requestCardGeneration([
+        userMessage,
+        createMessage("agent", reply),
+      ]);
+      const source: DiarySource = {
+        kind: "written",
+        title: input.title.trim() || undefined,
+        content: input.content.trim(),
+        mood: input.mood,
+        reply,
+      };
+      const existingEntry = existingEntryId
+        ? loadDiaryEntries().find((entry) => entry.id === existingEntryId)
+        : undefined;
+      const entry = existingEntry
+        ? await updateEntryWithGeneratedCard(existingEntry, card)
+        : await saveGeneratedCard(card, source);
+      disposeGeneratedCard(card);
+      card = undefined;
+      refreshEntries();
+      setDiaryAudioProgress({
+        status: "ready",
+        input,
+        reply,
+        entryId: entry.id,
+        title: entry.title,
+      });
+    } catch (error) {
+      if (card) disposeGeneratedCard(card);
+      const entry = savePendingDiary(
+        {
+          kind: "written",
+          title: input.title.trim() || undefined,
+          content: input.content.trim(),
+          mood: input.mood,
+          reply: reply || undefined,
+        },
+        existingEntryId,
+      );
+      refreshEntries();
+      setDiaryAudioProgress({
+        status: "error",
+        input,
+        reply: reply || undefined,
+        entryId: entry.id,
+        title: entry.title,
+        error: error instanceof Error ? error.message : "声音日记暂时没有完成。",
+      });
     }
   }
 
@@ -551,8 +747,6 @@ export default function Home() {
     setInput("");
     fullAgentRepliesRef.current = {};
     setMessages(initialMessages());
-    setWrittenParagraphs([]);
-    setHasStartedWriting(false);
     setGeneration(null);
     setView({ name: "today" });
   }
@@ -562,27 +756,120 @@ export default function Home() {
     refreshEntries();
   }
 
+  function handleFavorite(entryId: string, favorite: boolean) {
+    setEntryFavorite(entryId, favorite);
+    refreshEntries();
+  }
+
   async function handleDelete(entry: DiaryEntry) {
     if (!window.confirm(`删除《${entry.title}》吗？`)) return;
     await deleteEntry(entry);
     refreshEntries();
-    setView({ name: "notebook" });
+    setView({ name: "diary" });
+  }
+
+  function handlePreferenceUpdate(next: CompanionPreferences) {
+    setCompanionPreferences(next);
+    saveCompanionPreferences(next);
+  }
+
+  async function handleClearEntries() {
+    if (!entries.length) return;
+    if (!window.confirm("清除全部日记、封面和声音吗？此操作无法撤销。")) return;
+
+    for (const entry of entries) {
+      await deleteEntry(entry);
+    }
+    refreshEntries();
   }
 
   return (
-    <main className="min-h-dvh bg-[#f5f7f4] text-[#20302d]">
-      <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-[#f8faf7] shadow-[0_0_60px_rgba(50,70,65,0.08)]">
+    <main className="healing-root min-h-dvh text-[#2f3328]">
+      <div className="healing-phone mx-auto flex min-h-dvh w-full max-w-[900px] flex-col overflow-hidden shadow-[0_0_80px_rgba(73,78,55,0.18)]">
         <div className="flex-1 pb-24">
+          {view.name === "home" ? (
+            <HomeDashboardView
+              openRadio={() => setView({ name: "today" })}
+              hasConversation={hasConversationHistory(messages)}
+              serviceAvailability={serviceAvailability}
+              momentContext={momentContext}
+              weatherBusy={weatherBusy}
+              weatherNotice={weatherNotice}
+              refreshWeather={() => void handleWeatherRefresh()}
+              openServices={() => setView({ name: "mine", panel: "services" })}
+              revisitEntry={revisitEntry}
+              openEntry={(id) => setView({ name: "entry", id, returnTo: "home" })}
+              openDiaryCompose={() => setView({ name: "compose-diary" })}
+              openMode={(mode) => setView({ name: "mode", mode })}
+            />
+          ) : null}
+
+          {view.name === "mode" && view.mode === "meditate" ? (
+            <MeditationModeView goBack={() => setView({ name: "home" })} />
+          ) : null}
+
+          {view.name === "mode" && view.mode === "move" ? (
+            <MovementModeView goBack={() => setView({ name: "home" })} />
+          ) : null}
+
+          {view.name === "mode" && view.mode === "sleep" ? (
+            <RestModeView goBack={() => setView({ name: "home" })} />
+          ) : null}
+
+          {view.name === "diary" ? (
+            <DiaryHubView
+              entries={entries}
+              startWriting={() => setView({ name: "compose-diary" })}
+              openEntry={(id) => {
+                setView({ name: "entry", id });
+              }}
+              renameEntry={handleRename}
+              deleteEntry={handleDelete}
+              favoriteEntry={handleFavorite}
+            />
+          ) : null}
+
+          {view.name === "compose-diary" ? (
+            <DiaryComposerView
+              goBack={() => {
+                refreshEntries();
+                setView({ name: "diary" });
+              }}
+              createAudioDiary={createAudioDiaryFromComposer}
+            />
+          ) : null}
+
+          {view.name === "diary-audio" ? (
+            <DiaryAudioProgressView
+              progress={diaryAudioProgress}
+              goBack={() => setView({ name: "diary" })}
+              openEntry={(id) => setView({ name: "entry", id })}
+              retry={() => {
+                if (diaryAudioProgress) {
+                  void createAudioDiaryFromComposer(
+                    diaryAudioProgress.input,
+                    diaryAudioProgress.entryId,
+                    diaryAudioProgress.reply,
+                  );
+                }
+              }}
+            />
+          ) : null}
+
           {view.name === "today" ? (
             <TodayView
               messages={messages}
               input={input}
-              writtenParagraphs={writtenParagraphs}
-              hasStartedWriting={hasStartedWriting}
-              startWriting={() => setHasStartedWriting(true)}
+              isAgentBusy={isAgentBusy}
+              soundStyle={companionPreferences.soundStyle}
               setInput={setInput}
               submitMessage={submitMessage}
               generation={generation}
+              soundNeedsConnection={serviceAvailability?.sound === "missing"}
+              openServices={() => {
+                setGeneration(null);
+                setView({ name: "mine", panel: "services" });
+              }}
               retryGeneration={() =>
                 runGeneration(materializeConversation(messages, fullAgentRepliesRef.current))
               }
@@ -595,7 +882,7 @@ export default function Home() {
                 setView({ name: "draft-detail" });
               }}
               resetToday={resetToday}
-              agentAvatarEmoji={agentAvatarEmoji}
+              goHome={() => setView({ name: "home" })}
             />
           ) : null}
 
@@ -607,7 +894,7 @@ export default function Home() {
               }}
               renameEntry={handleRename}
               deleteEntry={handleDelete}
-              startNew={resetToday}
+              startNew={() => setView({ name: "compose-diary" })}
             />
           ) : null}
 
@@ -615,14 +902,45 @@ export default function Home() {
             <EntryDetailView
               entry={selectedEntry}
               goBack={() => {
-                setView({ name: "notebook" });
+                if (view.returnTo === "home") {
+                  setView({ name: "home" });
+                } else {
+                  setView(view.returnTo === "mine" ? { name: "mine" } : { name: "diary" });
+                }
               }}
               renameEntry={handleRename}
               deleteEntry={handleDelete}
+              favoriteEntry={handleFavorite}
+              retryAudioDiary={(entry) => {
+                if (!entry.source) return;
+                void createAudioDiaryFromComposer(
+                  {
+                    title: entry.source.title ?? entry.title,
+                    content: entry.source.content,
+                    mood: entry.source.mood ?? "平静",
+                  },
+                  entry.id,
+                  entry.source.reply,
+                );
+              }}
+              autoPlay={companionPreferences.autoPlayEntry}
+              soundStyle={companionPreferences.soundStyle}
             />
           ) : null}
 
-          {view.name === "mine" ? <MineView /> : null}
+          {view.name === "mine" ? (
+            <MineView
+              entries={entries}
+              preferences={companionPreferences}
+              updatePreferences={handlePreferenceUpdate}
+              openEntry={(id) => setView({ name: "entry", id, returnTo: "mine" })}
+              clearEntries={handleClearEntries}
+              archiveImported={refreshEntries}
+              initialPanel={view.panel}
+              serviceAvailability={serviceAvailability}
+              servicesChanged={refreshServiceAvailability}
+            />
+          ) : null}
 
           {view.name === "draft-detail" ? (
             <DraftDetailView
@@ -636,16 +954,21 @@ export default function Home() {
 
         <BottomNav
           active={
-            view.name === "today" || view.name === "draft-detail"
-              ? "today"
-              : view.name === "mine"
+            (view.name === "home" ||
+              view.name === "mode" ||
+              view.name === "today" ||
+              view.name === "draft-detail" ||
+              (view.name === "entry" && view.returnTo === "home"))
+              ? "home"
+              : view.name === "mine" ||
+                  (view.name === "entry" && view.returnTo === "mine")
                 ? "mine"
-                : "notebook"
+                : "diary"
           }
-          goToday={() => setView({ name: "today" })}
-          goNotebook={() => {
+          goHome={() => setView({ name: "home" })}
+          goDiary={() => {
             refreshEntries();
-            setView({ name: "notebook" });
+            setView({ name: "diary" });
           }}
           goMine={() => {
             setView({ name: "mine" });
@@ -662,15 +985,668 @@ function AppHeader(props: { right?: React.ReactNode }) {
   return null;
 }
 
+function HomeDashboardView({
+  openRadio,
+  hasConversation,
+  serviceAvailability,
+  momentContext,
+  weatherBusy,
+  weatherNotice,
+  refreshWeather,
+  openServices,
+  revisitEntry,
+  openEntry,
+  openDiaryCompose,
+  openMode,
+}: {
+  openRadio: () => void;
+  hasConversation: boolean;
+  serviceAvailability: ServiceAvailability | null;
+  momentContext: MomentContext | null;
+  weatherBusy: boolean;
+  weatherNotice: string;
+  refreshWeather: () => void;
+  openServices: () => void;
+  revisitEntry?: DiaryEntry;
+  openEntry: (id: string) => void;
+  openDiaryCompose: () => void;
+  openMode: (mode: ModeKey) => void;
+}) {
+  const conversationNeedsConnection = serviceAvailability?.conversation === "missing";
+  const soundNeedsConnection = serviceAvailability?.sound === "missing";
+  const connectionNeedsAttention = conversationNeedsConnection || soundNeedsConnection;
+  const connectionLabel = serviceAvailability === null
+    ? "正在确认"
+    : conversationNeedsConnection
+      ? "等待连接"
+      : soundNeedsConnection
+        ? "声音待连接"
+        : "在这里";
+  const momentDateLabel = momentContext
+    ? Number(momentContext.localDate.slice(5, 7)) +
+      "月" +
+      Number(momentContext.localDate.slice(8, 10)) +
+      "日"
+    : "今天";
+  const weatherLabel = weatherBusy
+    ? "正在读取天气"
+    : momentContext?.weather
+      ? momentDateLabel +
+        " · " +
+        momentContext.weather.summary +
+        " " +
+        Math.round(momentContext.weather.temperature) +
+        "°"
+      : momentDateLabel + " · 加入天气";
+
+  const featureCards = [
+    {
+      title: "写一段声音日记",
+      detail: "让今天留下一点温度。",
+      icon: <BookOpen size={22} />,
+      className: "mode-card--paper",
+      onClick: openDiaryCompose,
+    },
+    {
+      title: "静一会儿",
+      detail: "把注意力，慢慢还给呼吸。",
+      icon: <Sparkles size={22} />,
+      className: "mode-card--mint",
+      onClick: () => openMode("meditate"),
+    },
+    {
+      title: "休息一会儿",
+      detail: "不用等到晚上，随时松一口气。",
+      icon: <Waves size={22} />,
+      className: "mode-card--night",
+      onClick: () => openMode("sleep"),
+    },
+    {
+      title: "身体唤醒",
+      detail: "跟着节奏，做一段轻量活动。",
+      icon: <Footprints size={22} />,
+      className: "mode-card--blue",
+      onClick: () => openMode("move"),
+    },
+  ];
+
+  return (
+    <section className="home-shell px-5 pb-8 pt-7">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <div
+            style={{
+              width: 108,
+              height: 44,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              overflow: "hidden",
+            }}
+          >
+            <Image
+              src="/brand/meloday-logo.png"
+              alt="Meloday"
+              width={1500}
+              height={669}
+              priority
+              style={{ display: "block", width: 96, height: "auto" }}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={refreshWeather}
+            disabled={weatherBusy}
+            className="home-weather"
+            aria-label={
+              momentContext?.weather
+                ? "更新此刻天气"
+                : "加入此刻天气，需要授权大致位置"
+            }
+          >
+            <CloudSun size={16} aria-hidden="true" />
+            <span>{weatherLabel}</span>
+          </button>
+          {weatherNotice ? (
+            <p className="home-weather-notice" role="status">{weatherNotice}</p>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={openServices}
+          disabled={!connectionNeedsAttention}
+          className={"home-status" + (connectionNeedsAttention ? " home-status--attention" : "")}
+          aria-label={connectionNeedsAttention ? "打开服务连接" : connectionLabel}
+        >
+          <span className="home-status__dot" />
+          {connectionLabel}
+        </button>
+      </div>
+
+      <button
+        type="button"
+        onClick={conversationNeedsConnection ? openServices : openRadio}
+        className="premium-hero mt-7 min-h-[370px] w-full overflow-hidden rounded-[30px] p-6 text-left text-white transition duration-300 active:scale-[0.985]"
+      >
+        <div className="relative z-10 flex min-h-[322px] flex-col justify-between">
+          <div className="flex items-center gap-3">
+            <div className="premium-hero__badge">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#d8f472] shadow-[0_0_12px_rgba(216,244,114,0.72)]" />
+              {conversationNeedsConnection ? "开始前" : hasConversation ? "上次聊到这里" : "此刻声场"}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-[#d8f472]">
+              {conversationNeedsConnection ? "完成一次连接" : hasConversation ? "对话已经为你留着" : "为此刻生成"}
+            </p>
+            <h2 className="mt-4 max-w-[19rem] text-[42px] font-medium leading-[1.03] tracking-[-0.055em]">
+              {conversationNeedsConnection
+                ? "准备好回应和声音"
+                : hasConversation
+                  ? "没说完的话，可以从这里继续"
+                  : "说说现在，听见只属于你的声音"}
+            </h2>
+            <p className="mt-5 max-w-[18rem] text-[14px] leading-6 text-white/62">
+              {conversationNeedsConnection
+                ? "完成后，就可以直接说出现在的感觉。"
+                : hasConversation
+                  ? "不用重新讲一遍，接着刚才的感觉说就好。"
+                  : "不用挑曲风。疲惫、烦乱、想放空，直接说就好。"}
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 border-t border-white/12 pt-5">
+            <span className="text-sm font-semibold text-white">
+              {conversationNeedsConnection ? "去完成连接" : hasConversation ? "继续聊" : "从一句话开始"}
+            </span>
+            <span className="premium-hero__play">
+              <Play size={17} className="ml-0.5" fill="currentColor" />
+            </span>
+          </div>
+        </div>
+      </button>
+
+      {revisitEntry ? (
+        <button
+          type="button"
+          onClick={() => openEntry(revisitEntry.id)}
+          className="home-revisit"
+        >
+          <span className="home-revisit__copy">
+            <small>
+              {revisitEntry.favorite ? "收藏的声音" : "再听一次"} · {formatDateLabel(revisitEntry.date)}
+            </small>
+            <strong>《{revisitEntry.title}》</strong>
+            <span>{revisitEntry.summary}</span>
+          </span>
+          <i aria-hidden="true">
+            <Play size={16} fill="currentColor" />
+          </i>
+        </button>
+      ) : null}
+
+      <div className="mb-4 mt-8 flex items-end justify-between gap-4">
+        <div>
+          <p className="text-[14px] font-semibold tracking-[0.08em] text-[#80918c]">也可以先从这里开始</p>
+          <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.04em] text-[#19352e]">不想说话时，也有别的方式</h2>
+        </div>
+        <span className="pb-1 text-[14px] text-[#82908c]">随时回来</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {featureCards.map((card) => {
+          const content = (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <span className="mode-card__icon">
+                  {card.icon}
+                </span>
+              </div>
+              <div className="mt-8">
+                <h3 className="text-[19px] font-semibold leading-tight tracking-[-0.03em]">{card.title}</h3>
+                <p className="mt-2 text-[14px] leading-6 opacity-70">{card.detail}</p>
+              </div>
+            </>
+          );
+
+          return card.onClick ? (
+            <button
+              key={card.title}
+              type="button"
+              onClick={card.onClick}
+              className={"mode-card min-h-[178px] rounded-[22px] p-4 text-left transition duration-200 active:scale-[0.985] " + card.className}
+            >
+              {content}
+            </button>
+          ) : (
+            <article
+              key={card.title}
+              className={"mode-card min-h-[178px] rounded-[22px] p-4 text-left " + card.className}
+            >
+              {content}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function DiaryComposerView({
+  goBack,
+  createAudioDiary,
+}: {
+  goBack: () => void;
+  createAudioDiary: (input: DiaryComposeInput) => Promise<void>;
+}) {
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [mood, setMood] = useState("平静");
+  const [showRequired, setShowRequired] = useState(false);
+  const writingDate = formatWritingDate(new Date());
+  const writingTime = new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: "Asia/Shanghai",
+  }).format(new Date());
+  const moods = ["平静", "开心", "疲惫", "想念", "复杂"];
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!content.trim()) {
+      setShowRequired(true);
+      return;
+    }
+
+    await createAudioDiary({ title, content, mood });
+  }
+
+  return (
+    <>
+      <BackHeader goBack={goBack} title="写声音日记" />
+      <section className="diary-compose-page">
+        <div className="diary-compose-editor">
+          <header className="diary-compose-page__header">
+            <div className="diary-compose-heading">
+              <div>
+                <p className="diary-compose-page__date">
+                  {writingDate.weekday} · {writingDate.date}
+                </p>
+                <h1>给此刻，一段回声</h1>
+              </div>
+              <div className="diary-compose-orb" aria-hidden="true">
+                <i />
+                <i />
+              </div>
+            </div>
+            <p>有些事，写下就好。</p>
+            <div className="diary-compose-soundline" aria-label={"此刻 · " + writingTime}>
+              <div aria-hidden="true">
+                {[14, 26, 38, 21, 48, 31, 18, 42, 25, 35, 15].map((height, index) => (
+                  <span key={height + "-" + index} style={{ height }} />
+                ))}
+              </div>
+              <span>此刻 · {writingTime}</span>
+            </div>
+          </header>
+
+          <form className="diary-compose-form" onSubmit={handleSubmit}>
+            <div className="diary-compose-sheet">
+              <label className="sr-only" htmlFor="diary-title">日记标题</label>
+              <input
+                id="diary-title"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                maxLength={36}
+                placeholder="给它一个名字"
+                className="diary-compose-title"
+              />
+
+              <label className="sr-only" htmlFor="diary-content">日记内容</label>
+              <textarea
+                id="diary-content"
+                value={content}
+                onChange={(event) => {
+                  setContent(event.target.value);
+                  if (event.target.value.trim()) setShowRequired(false);
+                }}
+                maxLength={2000}
+                placeholder="先写下你舍不得略过的那一瞬。"
+                className="diary-compose-body"
+              />
+            </div>
+
+            <div className="diary-compose-moods">
+              <p>这一页的颜色</p>
+              <div role="group" aria-label="选择心情">
+                {moods.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setMood(item)}
+                    className={
+                      "diary-compose-mood" +
+                      (mood === item ? " diary-compose-mood--active" : "")
+                    }
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="diary-compose-footer">
+              <div className="diary-compose-meta" aria-live="polite">
+                <span>
+                  {showRequired
+                    ? "先留下一点此刻的痕迹"
+                    : content.trim()
+                      ? "这一页正在有了形状"
+                      : "还没有落笔"}
+                </span>
+                <span>{content.length ? content.length + " 字" : ""}</span>
+              </div>
+
+              <button type="submit" className="diary-compose-save">
+                <Waves size={18} strokeWidth={1.9} />
+                留作声音
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function DiaryAudioProgressView({
+  progress,
+  goBack,
+  openEntry,
+  retry,
+}: {
+  progress: DiaryAudioProgress | null;
+  goBack: () => void;
+  openEntry: (id: string) => void;
+  retry: () => void;
+}) {
+  const status = progress?.status ?? "replying";
+  const title =
+    status === "ready"
+      ? "这一段，已经留好"
+      : status === "error"
+        ? "文字已经留好"
+        : "慢慢来";
+  const description =
+    status === "ready"
+      ? "想听的时候，再回来。"
+      : status === "error"
+        ? "声音还没完成，想继续时再试就好。"
+        : "这一刻，值得被好好收下。";
+
+  return (
+    <>
+      <BackHeader goBack={goBack} title="声音日记" />
+      <section className="diary-audio-page">
+        <div className={"diary-audio-canvas diary-audio-canvas--" + status}>
+          <div className="diary-audio-canvas__top">
+            <span>声音日记</span>
+            <span>·</span>
+          </div>
+          <div className="diary-audio-wave" aria-hidden="true">
+            {[22, 38, 28, 52, 35, 68, 42, 58, 30, 48, 25, 39, 20].map((height, index) => (
+              <span
+                key={index}
+                style={{ height: height + "px", animationDelay: index * 100 + "ms" }}
+              />
+            ))}
+          </div>
+          <div className="diary-audio-canvas__bottom">
+            <Image
+              src="/brand/meloday-logo.png"
+              alt="Meloday"
+              width={1500}
+              height={669}
+              className="diary-audio-logo"
+              style={{ display: "block", width: 76, height: "auto" }}
+            />
+            <Radio size={17} strokeWidth={1.7} />
+          </div>
+        </div>
+
+        <div className="diary-audio-intro">
+          <h1>{title}</h1>
+          <p>{description}</p>
+        </div>
+
+
+        {progress?.reply ? (
+          <article className="diary-audio-reply">
+            <div>
+              <Radio size={15} strokeWidth={1.8} />
+              <span>Meloday 的回应</span>
+            </div>
+            <p>{progress.reply}</p>
+          </article>
+        ) : null}
+
+        {status === "ready" && progress?.entryId ? (
+          <button
+            type="button"
+            onClick={() => openEntry(progress.entryId!)}
+            className="diary-audio-open"
+          >
+            听听这篇《{progress.title || "声音日记"}》
+            <Play size={16} fill="currentColor" />
+          </button>
+        ) : null}
+
+        {status === "error" ? (
+          <div className="diary-audio-error-actions">
+            <button type="button" onClick={retry} className="diary-audio-retry">
+              <RefreshCw size={16} />
+              继续准备声音
+            </button>
+            {progress?.entryId ? (
+              <button
+                type="button"
+                onClick={() => openEntry(progress.entryId!)}
+                className="diary-audio-saved"
+              >
+                先查看已保存的文字
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+    </>
+  );
+}
+
+function DiaryHubView({
+  entries,
+  startWriting,
+  openEntry,
+  renameEntry,
+  deleteEntry,
+  favoriteEntry,
+}: {
+  entries: DiaryEntry[];
+  startWriting: () => void;
+  openEntry: (id: string) => void;
+  renameEntry: (id: string, title: string) => void;
+  deleteEntry: (entry: DiaryEntry) => void;
+  favoriteEntry: (id: string, favorite: boolean) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<"all" | "favorite">("all");
+
+  const filteredEntries = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    const scopedEntries =
+      scope === "favorite" ? entries.filter((entry) => entry.favorite) : entries;
+    if (!normalized) return scopedEntries;
+
+    return scopedEntries.filter((entry) =>
+      [
+        entry.title,
+        entry.summary,
+        entry.fullDiary,
+        entry.source?.content,
+        entry.source?.mood,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalized)),
+    );
+  }, [entries, query, scope]);
+
+  const groupedEntries = useMemo(() => {
+    return filteredEntries.reduce<Record<string, DiaryEntry[]>>((groups, entry) => {
+      groups[entry.date] = groups[entry.date] ?? [];
+      groups[entry.date].push(entry);
+      return groups;
+    }, {});
+  }, [filteredEntries]);
+
+  return (
+    <section className="diary-page">
+      <header className="diary-page__header">
+        <p className="diary-eyebrow">声音日记</p>
+        <h1 className="diary-page__title">日记</h1>
+        <p className="diary-page__intro">把值得记住的片段，留成一段可以重听的声音。</p>
+      </header>
+
+      <button
+        type="button"
+        onClick={startWriting}
+        className="diary-compose-button"
+      >
+        <span className="diary-compose-button__icon" aria-hidden="true">
+          <PenLine size={23} />
+        </span>
+        <span className="diary-compose-button__copy">
+          <small>今天想留下些什么？</small>
+          <strong>写今天</strong>
+        </span>
+        <span className="diary-compose-button__action">开始</span>
+      </button>
+      {entries.length > 0 ? (
+        <div className="diary-search" role="search">
+          <Search size={20} aria-hidden="true" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索标题、内容或心情"
+            aria-label="搜索声音日记"
+          />
+          {query ? (
+            <button type="button" onClick={() => setQuery("")}>清除</button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {entries.length > 0 ? (
+        <div className="diary-filter" role="group" aria-label="筛选日记">
+          <button
+            type="button"
+            onClick={() => setScope("all")}
+            aria-pressed={scope === "all"}
+          >
+            全部
+          </button>
+          <button
+            type="button"
+            onClick={() => setScope("favorite")}
+            aria-pressed={scope === "favorite"}
+          >
+            <Heart size={16} fill={scope === "favorite" ? "currentColor" : "none"} />
+            收藏
+          </button>
+        </div>
+      ) : null}
+
+      <div className="diary-page__list">
+        {entries.length === 0 ? (
+          <button type="button" onClick={startWriting} className="diary-empty">
+            <BookOpen size={28} strokeWidth={1.5} />
+            <span>还没有留下什么</span>
+            <small>从今天的一句话开始。</small>
+          </button>
+        ) : null}
+        {entries.length > 0 && filteredEntries.length === 0 ? (
+          <div className="diary-search-empty">
+            <strong>{scope === "favorite" && !query ? "还没有收藏的声音" : "没有找到相关日记"}</strong>
+            <p>
+              {scope === "favorite" && !query
+                ? "遇到想再听的日记时，点一下心形就好。"
+                : "换一个标题、心情或记忆片段试试。"}
+            </p>
+          </div>
+        ) : null}
+
+
+        {Object.entries(groupedEntries).map(([date, dayEntries]) => (
+          <section key={date} className="diary-day">
+            <div className="diary-day__heading">
+              <time>{formatDateLabel(date)}</time>
+              <span>{dayEntries.length} 篇</span>
+            </div>
+            <div className="diary-day__entries">
+              {dayEntries.map((entry) => (
+                <NotebookEntryCard
+                  key={entry.id}
+                  entry={entry}
+                  openEntry={openEntry}
+                  renameEntry={renameEntry}
+                  deleteEntry={deleteEntry}
+                  favoriteEntry={favoriteEntry}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+type BrowserSpeechResultEvent = {
+  results: ArrayLike<{ 0?: { transcript?: string } }>;
+};
+
+type BrowserSpeechRecognition = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: BrowserSpeechResultEvent) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+};
+
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
+const momentPrompts = [
+  "有点累，想让身体松下来",
+  "脑子很吵，想安静一点",
+  "心里空空的，想有人陪着",
+  "提不起劲，想慢慢找回力气",
+] as const;
+
+const refinePrompts = ["再轻一点", "更温暖一点", "想要一点力量"] as const;
 function TodayView({
   messages,
   input,
-  writtenParagraphs,
-  hasStartedWriting,
-  startWriting,
+  isAgentBusy,
+  soundStyle,
   setInput,
   submitMessage,
   generation,
+  soundNeedsConnection,
+  openServices,
   retryGeneration,
   draft,
   isDraftPreviewOpen,
@@ -678,16 +1654,17 @@ function TodayView({
   closeDraftPreview,
   openDraftDetail,
   resetToday,
-  agentAvatarEmoji,
+  goHome,
 }: {
   messages: ChatMessage[];
   input: string;
-  writtenParagraphs: string[];
-  hasStartedWriting: boolean;
-  startWriting: () => void;
-  setInput: (value: string) => void;
-  submitMessage: () => void;
-  generation: { running: boolean; stage: number; error?: string } | null;
+  isAgentBusy: boolean;
+  soundStyle: CompanionPreferences["soundStyle"];
+  setInput: React.Dispatch<React.SetStateAction<string>>;
+  submitMessage: (contentOverride?: string) => void;
+  generation: { running: boolean; error?: string } | null;
+  soundNeedsConnection: boolean;
+  openServices: () => void;
   retryGeneration: () => void;
   draft: GeneratedCard | null;
   isDraftPreviewOpen: boolean;
@@ -695,125 +1672,235 @@ function TodayView({
   closeDraftPreview: () => void;
   openDraftDetail: () => void;
   resetToday: () => void;
-  agentAvatarEmoji: string;
+  goHome: () => void;
 }) {
-  const latestAgentMessage = [...messages]
-    .reverse()
-    .find((message) => message.role === "agent");
   const writingDate = formatWritingDate(new Date());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const diaryFrameRef = useRef<HTMLElement>(null);
+  const chatFrameRef = useRef<HTMLElement>(null);
+  const speechRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceNotice, setVoiceNotice] = useState("");
+  const isGenerating = Boolean(generation?.running && !generation.error);
+  const isBusy = isAgentBusy || isGenerating;
+  const latestUserText = [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
+  const showMomentPrompts = !latestUserText && !isBusy && !draft;
+  const latestAgentId = [...messages]
+    .reverse()
+    .find((message) => message.role === "agent")?.id;
+  useEffect(() => {
+    return () => speechRecognitionRef.current?.stop();
+  }, []);
 
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = "auto";
-    textarea.style.height = `${textarea.scrollHeight}px`;
-  }, [input, writtenParagraphs.length, hasStartedWriting]);
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 112)}px`;
+  }, [input]);
 
   useEffect(() => {
-    const frame = diaryFrameRef.current;
+    const frame = chatFrameRef.current;
     if (!frame) return;
     frame.scrollTop = frame.scrollHeight;
-  }, [input, writtenParagraphs, hasStartedWriting]);
+  }, [messages, draft, isBusy]);
+  function toggleVoiceInput() {
+    if (speechRecognitionRef.current && isListening) {
+      speechRecognitionRef.current.stop();
+      return;
+    }
 
-  const isGenerating = Boolean(generation?.running && !generation.error);
-  const inputPlaceholder = draft
-    ? "还有什么说的吗"
-    : writtenParagraphs.length > 0
-      ? "继续写下去"
-      : "写下今天的事";
+    const speechWindow = window as typeof window & {
+      SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+      webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+    };
+    const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
 
+    if (!Recognition) {
+      setVoiceNotice("当前浏览器暂不支持语音输入，可以直接打字。");
+      return;
+    }
+
+    const recognition = new Recognition();
+    recognition.lang = "zh-CN";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map((result) => result[0]?.transcript ?? "")
+        .join("")
+        .trim();
+      if (transcript) {
+        setInput((current) => [current.trim(), transcript].filter(Boolean).join(" "));
+        setVoiceNotice("已经听见，可以继续补充或发送。");
+      }
+    };
+    recognition.onerror = () => {
+      setVoiceNotice("这次没有听清，可以再说一次。");
+    };
+    recognition.onend = () => {
+      setIsListening(false);
+      speechRecognitionRef.current = null;
+    };
+
+    speechRecognitionRef.current = recognition;
+    setIsListening(true);
+    setVoiceNotice("正在听，你可以直接说。");
+    recognition.start();
+  }
   return (
     <>
-      <AppHeader
-        right={
-          <div className="grid h-11 w-11 place-items-center rounded-full bg-[#e9f0eb] text-[#47615b]">
-            <Music2 size={20} />
+      <section className="chat-room">
+        <header className="chat-header">
+          <button
+            type="button"
+            onClick={goHome}
+            aria-label="返回首页"
+            title="返回首页"
+            className="chat-header__button"
+          >
+            <ChevronLeft size={21} />
+          </button>
+
+          <div className="min-w-0 flex-1 text-center">
+            <h1 className="truncate text-[17px] font-semibold text-[#2d3d38]">Meloday 电台</h1>
+            <p className="mt-1 flex items-center justify-center gap-1.5 text-[14px] text-[#80908b]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#8fcdbb]" />
+              在线 · 正在听
+            </p>
           </div>
-        }
-      />
-      <div className="relative">
-        <section className="absolute inset-x-0 top-0 z-20 px-5 pt-5">
+
+          <div className="chat-header__signal" aria-hidden="true">
+            <Radio size={18} />
+          </div>
+        </header>
+
+        <ChatAudioStatus
+          key={draft?.audioUrl ?? "audio-status"}
+          draft={draft}
+          generation={generation}
+          isAgentBusy={isAgentBusy}
+          momentText={latestUserText}
+          openDraftPreview={openDraftPreview}
+        />
+
+        <section
+          ref={chatFrameRef}
+          className="diary-scroll chat-transcript"
+          aria-label="与 Meloday 的对话"
+        >
+          <div className="chat-date-divider" aria-label={`${writingDate.date} ${writingDate.weekday}`}>
+            <span />
+            <time>{writingDate.date} · {writingDate.weekday}</time>
+            <span />
+          </div>
+
           <div className="space-y-4">
-            {latestAgentMessage ? (
+            {messages.map((message) => (
               <ChatBubble
-                message={latestAgentMessage}
-                loading={isGenerating}
-                agentAvatarEmoji={agentAvatarEmoji}
+                key={message.id}
+                message={message}
+                loading={message.id === latestAgentId && isBusy}
+                soundStyle={soundStyle}
               />
+            ))}
+
+            {showMomentPrompts ? (
+              <div className="moment-starters" aria-label="快捷描述此刻状态">
+                <p>不想组织语言，可以从一句接近的开始</p>
+                <div>
+                  {momentPrompts.map((prompt) => (
+                    <button key={prompt} type="button" onClick={() => submitMessage(prompt)}>
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {draft && !generation ? (
+              <div className="chat-media-message">
+                <div className="chat-avatar" aria-hidden="true">
+                  <Radio size={16} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="mb-1.5 text-[13px] font-medium text-[#81908b]">Meloday</p>
+                  <InlineDraftCard
+                    draft={draft}
+                    openDraftPreview={openDraftPreview}
+                    openDraftDetail={openDraftDetail}
+                  />
+                </div>
+              </div>
             ) : null}
           </div>
         </section>
-        {!hasStartedWriting ? (
-          <section className="px-5 pb-5 pt-36">
+
+        <footer className="chat-composer">
+          {draft && !generation ? (
+            <div className="chat-refine-suggestions" aria-label="继续调整这段声音">
+              <span>还想让它</span>
+              {refinePrompts.map((prompt) => (
+                <button key={prompt} type="button" onClick={() => submitMessage(prompt)} disabled={isBusy}>
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {voiceNotice ? <p className="chat-composer__voice-notice">{voiceNotice}</p> : null}
+          <div className="chat-composer__inner">
             <button
               type="button"
-              onClick={startWriting}
-              className="flex min-h-[52dvh] w-full flex-col items-center justify-center text-center outline-none"
+              onClick={toggleVoiceInput}
+              aria-label={isListening ? "停止语音输入" : "语音输入"}
+              title={isListening ? "停止语音输入" : "语音输入"}
+              aria-pressed={isListening}
+              className={"chat-composer__voice" + (isListening ? " is-listening" : "")}
             >
-              <p className="text-[17px] leading-7 text-[#51615c]">
-                写点什么吧，轻点屏幕开始
-              </p>
+              <Mic size={19} />
             </button>
-          </section>
-        ) : (
-          <section
-            ref={diaryFrameRef}
-            className="diary-scroll h-[calc(100dvh-6rem)] overflow-y-auto overscroll-contain px-5 pb-6 pt-36"
-          >
-            <div>
-              <div className="animate-[diaryDateIn_700ms_ease-out_forwards] text-center opacity-0">
-                <div className="text-3xl font-semibold tracking-normal text-[#263d3a]">
-                  {writingDate.date}
-                </div>
-                <div className="mt-1 text-sm font-medium text-[#68736f]">
-                  {writingDate.weekday}
-                </div>
-              </div>
-              {writtenParagraphs.length > 0 ? (
-                <div className="mt-8 space-y-4 text-[17px] leading-8 text-[#20302d]">
-                  {writtenParagraphs.map((paragraph, index) => (
-                    <p key={`${paragraph}_${index}`} className="whitespace-pre-wrap break-all">
-                      {paragraph}
-                    </p>
-                  ))}
-                </div>
-              ) : null}
-              {draft && !generation ? (
-                <InlineDraftCard
-                  draft={draft}
-                  openDraftPreview={openDraftPreview}
-                  openDraftDetail={openDraftDetail}
-                />
-              ) : null}
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    submitMessage();
-                  }
-                }}
-                disabled={isGenerating}
-                placeholder={inputPlaceholder}
-                rows={10}
-                autoFocus
-                className="mt-4 min-h-32 w-full resize-none overflow-hidden bg-transparent text-[17px] leading-8 text-[#20302d] outline-none placeholder:text-[#9aa39f] disabled:text-[#8e9994]"
-              />
-            </div>
-          </section>
-        )}
-      </div>
+
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey && !isBusy) {
+                  event.preventDefault();
+                  submitMessage();
+                }
+              }}
+              placeholder="发消息给 Meloday…"
+              rows={1}
+              className="chat-composer__input"
+            />
+
+            <button
+              type="button"
+              onClick={() => submitMessage()}
+              disabled={!input.trim() || isBusy}
+              aria-label="发送消息"
+              title="发送消息"
+              className="chat-composer__send"
+            >
+              {isBusy ? (
+                <LoaderCircle size={18} className="animate-spin" />
+              ) : (
+                <ArrowUp size={19} strokeWidth={2.2} />
+              )}
+            </button>
+          </div>
+        </footer>
+      </section>
+
       {generation?.error ? (
         <GenerationErrorToast
           message={generation.error}
+          connectionNeeded={soundNeedsConnection}
+          openServices={openServices}
           retryGeneration={retryGeneration}
           resetToday={resetToday}
         />
       ) : null}
+
       {draft && isDraftPreviewOpen && !generation ? (
         <FloatingDraftCard
           draft={draft}
@@ -825,79 +1912,217 @@ function TodayView({
   );
 }
 
+function ChatAudioStatus({
+  draft,
+  generation,
+  isAgentBusy,
+  momentText,
+  openDraftPreview,
+}: {
+  draft: GeneratedCard | null;
+  generation: { running: boolean; error?: string } | null;
+  isAgentBusy: boolean;
+  momentText: string;
+  openDraftPreview: () => void;
+}) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const isCreating = Boolean(generation?.running && !generation.error);
+  const isActive = isCreating || isAgentBusy || isPlaying;
+  const waveform = [12, 20, 15, 27, 18, 32, 22, 29, 16, 25, 13, 30, 19, 24, 15, 27, 18, 22];
+
+  const momentExcerpt = momentText.replace(/\s+/g, " ").trim().slice(0, 26);
+  const status = draft
+    ? "这一刻的声音"
+    : isCreating
+      ? "正在为此刻写一段声音"
+      : isAgentBusy
+        ? "Meloday 正在听"
+        : "等你说一句";
+
+  const detail = draft
+    ? momentExcerpt
+      ? `${draft.title} · 来自「${momentExcerpt}」`
+      : draft.title
+    : isCreating
+      ? momentExcerpt
+        ? `来自你刚才说的「${momentExcerpt}」`
+        : "正在靠近你此刻的状态"
+      : isAgentBusy
+        ? "正在听见你话里的状态和需要"
+        : "说一句现在的感觉，声音会从这里长出来";
+
+  async function togglePlayback() {
+    const audio = audioRef.current;
+    if (!audio || !draft) return;
+
+    if (audio.paused) {
+      await audio.play();
+      setIsPlaying(true);
+    } else {
+      audio.pause();
+      setIsPlaying(false);
+    }
+  }
+
+  return (
+    <div
+      className={"audio-status-bar" + (isActive ? " is-active" : "") + (draft ? " has-audio" : "")}
+      aria-label={`声音状态：${status}`}
+    >
+      {draft ? (
+        <audio
+          ref={audioRef}
+          src={draft.audioUrl}
+          preload="metadata"
+          onTimeUpdate={(event) => {
+            const audio = event.currentTarget;
+            setProgress(audio.duration ? audio.currentTime / audio.duration : 0);
+          }}
+          onPause={() => setIsPlaying(false)}
+          onEnded={() => {
+            setIsPlaying(false);
+            setProgress(0);
+          }}
+        />
+      ) : null}
+
+      <button
+        type="button"
+        onClick={togglePlayback}
+        disabled={!draft}
+        aria-label={draft ? (isPlaying ? "暂停音频" : "播放音频") : status}
+        title={draft ? (isPlaying ? "暂停音频" : "播放音频") : status}
+        className="audio-status-bar__control"
+      >
+        {draft ? (
+          isPlaying ? <Pause size={15} fill="currentColor" /> : <Play size={15} className="ml-0.5" fill="currentColor" />
+        ) : (
+          <Radio size={16} />
+        )}
+      </button>
+
+      <button
+        type="button"
+        onClick={draft ? openDraftPreview : undefined}
+        disabled={!draft}
+        className="audio-status-bar__copy"
+      >
+        <span className="audio-status-bar__label">{status}</span>
+        <span className="audio-status-bar__detail">{detail}</span>
+      </button>
+
+      <div className="audio-status-wave" aria-hidden="true">
+        {waveform.map((height, index) => {
+          const reached = draft ? index / waveform.length <= progress : false;
+          return (
+            <span
+              key={index}
+              className={reached ? "is-reached" : undefined}
+              style={{ height: `${height}px`, animationDelay: `${index * 55}ms` }}
+            />
+          );
+        })}
+      </div>
+
+      {draft ? (
+        <button
+          type="button"
+          onClick={openDraftPreview}
+          aria-label="查看音频与封面"
+          title="查看音频与封面"
+          className="audio-status-bar__expand"
+        >
+          <Maximize2 size={14} />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function ChatBubble({
   message,
   loading = false,
-  agentAvatarEmoji,
+  soundStyle,
 }: {
   message: ChatMessage;
   loading?: boolean;
-  agentAvatarEmoji: string;
+  soundStyle: CompanionPreferences["soundStyle"];
 }) {
-  const isUser = message.role === "user";
+  if (message.role === "user") {
+    return (
+      <div className="chat-message chat-message--user">
+        <div className="chat-bubble chat-bubble--user">
+          <p className="whitespace-pre-wrap break-words">{message.content || " "}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "items-stretch justify-start"}`}>
-      {!isUser ? (
-        <div className="mr-2 grid min-h-14 w-14 shrink-0 items-start justify-items-center">
-          <div className="grid h-14 w-14 place-items-center rounded-full bg-white text-2xl shadow-sm ring-1 ring-[#dfe6df]">
-            {agentAvatarEmoji}
-          </div>
-        </div>
-      ) : null}
-      <div
-        className={`min-h-14 min-w-0 whitespace-pre-wrap break-all px-4 py-3 text-[15px] leading-7 shadow-sm ${
-          isUser
-            ? "max-w-[78%] rounded-[8px] bg-[#263d3a] text-white"
-            : "max-w-[calc(100%-4rem)] rounded-[8px] border border-[#dfe6df] bg-white text-[#263d3a]"
-        }`}
-      >
-        <span>{message.content || " "}</span>
-        {loading ? (
-          <LoaderCircle
-            size={15}
-            className="ml-2 inline-block animate-spin align-[-2px] text-[#d47d6a]"
-          />
-        ) : null}
+    <article className="chat-message chat-message--agent">
+      <div className="chat-avatar" aria-hidden="true">
+        <Radio size={16} />
       </div>
-    </div>
+      <div className="min-w-0 max-w-[82%]">
+        <div className="mb-1.5 flex items-center gap-2">
+          <span className="text-[13px] font-medium text-[#81908b]">Meloday</span>
+          {loading ? <span className="chat-typing-dot" aria-label="正在输入" /> : null}
+        </div>
+        <div className="chat-bubble chat-bubble--agent">
+          <p className="whitespace-pre-wrap break-words">
+            {message.content || (loading ? "正在输入…" : " ")}
+          </p>
+          {message.content.trim() && !loading ? (
+            <SpokenReplyButton text={message.content} soundStyle={soundStyle} compact />
+          ) : null}
+        </div>
+      </div>
+    </article>
   );
 }
 
 function GenerationErrorToast({
   message,
+  connectionNeeded,
+  openServices,
   retryGeneration,
   resetToday,
 }: {
   message: string;
+  connectionNeeded: boolean;
+  openServices: () => void;
   retryGeneration: () => void;
   resetToday: () => void;
 }) {
   return (
     <div className="fixed inset-x-0 bottom-28 z-30 px-4">
-      <div className="mx-auto max-w-md rounded-[8px] border border-[#efc8c1] bg-white p-4 shadow-[0_18px_40px_rgba(50,70,65,0.18)]">
+      <div className="healing-card mx-auto max-w-md rounded-[8px] p-4">
         <div className="flex items-start gap-3">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#fbebe7] text-[#bd6253]">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#f3ff9b] text-[#7a7754]">
             <X size={17} />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-[#20302d]">创作没有完成</p>
-            <p className="mt-1 text-xs leading-5 text-[#68736f]">{message}</p>
+            <p className="text-[15px] font-semibold text-[#3f442f]">
+              {connectionNeeded ? "声音还没准备好" : "创作没有完成"}
+            </p>
+            <p className="mt-1 text-[14px] leading-6 text-[#7a7754]">{message}</p>
           </div>
         </div>
         <div className="mt-4 flex gap-3">
           <button
             type="button"
-            onClick={retryGeneration}
-            className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-full bg-[#263d3a] px-4 text-sm font-medium text-white"
+            onClick={connectionNeeded ? openServices : retryGeneration}
+            className="healing-primary inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full px-4 text-[14px] font-medium"
           >
-            <RefreshCw size={15} />
-            重试
+            {connectionNeeded ? <Radio size={16} /> : <RefreshCw size={15} />}
+            {connectionNeeded ? "完成连接" : "重试"}
           </button>
           <button
             type="button"
             onClick={resetToday}
-            className="h-10 flex-1 rounded-full border border-[#cfd8d1] bg-white px-4 text-sm font-medium text-[#263d3a]"
+            className="h-11 flex-1 rounded-full border border-[#7a7754]/20 bg-[#fffff7]/80 px-4 text-[14px] font-medium text-[#56583d]"
           >
             重新讲
           </button>
@@ -910,7 +2135,7 @@ function GenerationErrorToast({
 function DebugCopyToast({ message }: { message: string }) {
   return (
     <div className="pointer-events-none fixed inset-x-0 top-6 z-50 px-5">
-      <div className="mx-auto w-fit rounded-full bg-[#263d3a] px-4 py-2 text-sm font-medium text-white shadow-[0_12px_30px_rgba(32,48,45,0.22)]">
+      <div className="mx-auto w-fit rounded-full bg-[#7a7754] px-4 py-2 text-sm font-medium text-[#fffff7] shadow-[0_4px_8px_rgba(73,78,55,0.18)]">
         {message}
       </div>
     </div>
@@ -951,7 +2176,7 @@ function InlineDraftCard({
   return (
     <article
       onClick={openDraftPreview}
-      className="mt-6 grid cursor-pointer grid-cols-[76px_1fr_auto] items-center gap-3 rounded-[8px] border border-[#dfe6df] bg-white/92 p-3 shadow-sm transition active:scale-[0.99]"
+      className="radio-audio-card mt-5 cursor-pointer rounded-[8px] p-3 transition active:scale-[0.99]"
     >
       <audio
         key={draft.audioUrl}
@@ -961,44 +2186,51 @@ function InlineDraftCard({
         onPause={() => setIsPlaying(false)}
         onEnded={() => setIsPlaying(false)}
       />
-      <div
-        className="aspect-square overflow-hidden rounded-[8px] bg-[#dbe7e3] bg-cover bg-center"
-        style={{ backgroundImage: `url(${draft.coverUrl})` }}
-        aria-label="生成卡片封面"
-      />
-      <div className="min-w-0">
-        <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#d47d6a]">
-          Meloday
-        </p>
-        <h2 className="mt-1 truncate text-base font-semibold text-[#20302d]">
-          {draft.title}
-        </h2>
-        <p className="mt-1 truncate text-xs text-[#68736f]">今日纯器乐日记已完成</p>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <button
-          type="button"
-          onClick={togglePlayback}
-          aria-label={isPlaying ? "暂停音乐" : "播放音乐"}
-          title={isPlaying ? "暂停音乐" : "播放音乐"}
-          className="grid h-10 w-10 place-items-center rounded-full bg-[#263d3a] text-white"
+      <div className="grid grid-cols-[86px_1fr_auto] items-center gap-3">
+        <div
+          className="radio-cover-thumb"
+          style={{ backgroundImage: `linear-gradient(160deg, rgba(248,255,249,0.2), rgba(33,49,44,0.42)), url(${draft.coverUrl})` }}
+          aria-label="为此刻创作的音乐封面"
         >
-          {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
-        </button>
-        <button
-          type="button"
-          onClick={expandDetail}
-          aria-label="展开卡片"
-          title="展开卡片"
-          className="grid h-10 w-10 place-items-center rounded-full bg-[#edf2ee] text-[#47615b]"
-        >
-          <Maximize2 size={16} />
-        </button>
+          <Waves size={22} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[15px] font-semibold text-[#4a8c7e]">
+            这一段声音已经准备好
+          </p>
+          <h2 className="mt-1 truncate text-base font-semibold text-[#26312d]">
+            {draft.title}
+          </h2>
+          <div className="radio-mini-wave mt-3" aria-hidden="true">
+            {[8, 16, 11, 21, 13, 18, 10, 15].map((height, index) => (
+              <span key={index} style={{ height: `${height}px`, animationDelay: `${index * 80}ms` }} />
+            ))}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={togglePlayback}
+            aria-label={isPlaying ? "暂停音乐" : "播放音乐"}
+            title={isPlaying ? "暂停音乐" : "播放音乐"}
+            className="radio-play-button h-10 w-10"
+          >
+            {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={expandDetail}
+            aria-label="展开卡片"
+            title="展开卡片"
+            className="radio-icon-button"
+          >
+            <Maximize2 size={16} />
+          </button>
+        </div>
       </div>
     </article>
   );
 }
-
 function FloatingDraftCard({
   draft,
   closeDraftPreview,
@@ -1026,13 +2258,12 @@ function FloatingDraftCard({
 
   return (
     <div
-      className="fixed inset-0 z-30 grid place-items-center bg-[#20302d]/18 px-6 pb-20 backdrop-blur-[6px]"
+      className="fixed inset-0 z-30 grid place-items-center bg-[#21312c]/28 px-6 pb-20 backdrop-blur-[14px]"
       onClick={closeDraftPreview}
     >
       <article
-        className="relative aspect-square w-full max-w-[340px] overflow-hidden rounded-[8px] border border-white/80 bg-[#dbe7e3] bg-cover bg-center shadow-[0_22px_54px_rgba(32,48,45,0.24)] animate-[draftCardIn_260ms_ease-out_forwards]"
-        style={{ backgroundImage: `url(${draft.coverUrl})` }}
-        aria-label="生成卡片预览"
+        className="radio-player-modal relative w-full max-w-[340px] overflow-hidden rounded-[8px] p-4 animate-[draftCardIn_260ms_ease-out_forwards]"
+        aria-label="为此刻创作的歌曲预览"
         onClick={(event) => event.stopPropagation()}
       >
         <audio
@@ -1043,50 +2274,62 @@ function FloatingDraftCard({
           onPause={() => setIsPlaying(false)}
           onEnded={() => setIsPlaying(false)}
         />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(20,31,29,0.08)_0%,rgba(20,31,29,0.12)_42%,rgba(20,31,29,0.72)_100%)]" />
         <button
           type="button"
           onClick={closeDraftPreview}
           aria-label="关闭卡片"
           title="关闭卡片"
-          className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full bg-white/88 text-[#263d3a] shadow-sm backdrop-blur"
+          className="absolute right-3 top-3 z-20 grid h-10 w-10 place-items-center rounded-full bg-white/70 text-[#26312d] shadow-sm backdrop-blur"
         >
           <X size={17} />
         </button>
-        <div className="absolute inset-x-0 bottom-0 p-4 pr-28 text-white">
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/78">
-            Meloday
-          </p>
-          <h2 className="mt-1 line-clamp-2 text-2xl font-semibold leading-tight">
-            {draft.title}
-          </h2>
-          <p className="mt-2 text-xs text-white/82">今日纯器乐日记已完成</p>
+
+        <div
+          className="radio-modal-cover"
+          style={{ backgroundImage: `linear-gradient(180deg, rgba(248,255,249,0.12), rgba(26,45,39,0.66)), url(${draft.coverUrl})` }}
+        >
+          <div className="absolute inset-x-5 bottom-5">
+            <p className="text-[15px] font-semibold text-[#ccece2]">
+              只属于这一刻
+            </p>
+            <h2 className="mt-2 line-clamp-2 text-3xl font-semibold leading-tight text-white">
+              {draft.title}
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-white/78">从你今天的心情里，写给此刻的一段音乐</p>
+          </div>
         </div>
-        <div className="absolute bottom-4 right-4 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={togglePlayback}
-            aria-label={isPlaying ? "暂停音乐" : "播放音乐"}
-            title={isPlaying ? "暂停音乐" : "播放音乐"}
-            className="grid h-11 w-11 place-items-center rounded-full bg-white text-[#263d3a] shadow-sm"
-          >
-            {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
-          </button>
-          <button
-            type="button"
-            onClick={openDraftDetail}
-            aria-label="展开卡片"
-            title="展开卡片"
-            className="grid h-11 w-11 place-items-center rounded-full bg-[#263d3a] text-white shadow-sm"
-          >
-            <Maximize2 size={16} />
-          </button>
+
+        <div className="mt-4 rounded-[8px] bg-white/46 p-3">
+          <div className="radio-wave" aria-hidden="true">
+            {[18, 34, 22, 46, 30, 54, 28, 40, 20, 36, 24, 44].map((height, index) => (
+              <span key={index} style={{ height: `${height}px`, animationDelay: `${index * 75}ms` }} />
+            ))}
+          </div>
+          <div className="mt-4 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={togglePlayback}
+              aria-label={isPlaying ? "暂停音乐" : "播放音乐"}
+              title={isPlaying ? "暂停音乐" : "播放音乐"}
+              className="radio-play-button h-12 w-12"
+            >
+              {isPlaying ? <Pause size={17} /> : <Play size={17} className="ml-0.5" />}
+            </button>
+            <button
+              type="button"
+              onClick={openDraftDetail}
+              aria-label="展开卡片"
+              title="展开卡片"
+              className="radio-send-button h-12 flex-1"
+            >
+              查看完整日记
+            </button>
+          </div>
         </div>
       </article>
     </div>
   );
 }
-
 function NotebookView({
   entries,
   openEntry,
@@ -1117,7 +2360,7 @@ function NotebookView({
             onClick={startNew}
             title="写新的日记"
             aria-label="写新的日记"
-            className="grid h-11 w-11 place-items-center rounded-full bg-[#e9f0eb] text-[#47615b]"
+            className="healing-blue grid h-11 w-11 place-items-center rounded-full"
           >
             <PenLine size={19} />
           </button>
@@ -1125,14 +2368,14 @@ function NotebookView({
       />
       <section className="space-y-6 px-5 py-5">
         {entries.length === 0 ? (
-          <div className="grid min-h-[55dvh] place-items-center text-sm text-[#7b8580]">
+          <div className="healing-card grid min-h-[55dvh] place-items-center rounded-[8px] text-sm text-[#7a7754]">
             还没有日记
           </div>
         ) : null}
 
         {Object.entries(groupedEntries).map(([date, dayEntries]) => (
           <div key={date} className="space-y-3">
-            <h2 className="text-sm font-semibold text-[#68736f]">{formatDateLabel(date)}</h2>
+            <h2 className="text-sm font-semibold text-[#7a7754]">{formatDateLabel(date)}</h2>
             {dayEntries.map((entry) => (
               <NotebookEntryCard
                 key={entry.id}
@@ -1154,35 +2397,52 @@ function NotebookEntryCard({
   openEntry,
   renameEntry,
   deleteEntry,
+  favoriteEntry,
 }: {
   entry: DiaryEntry;
   openEntry: (id: string) => void;
   renameEntry: (id: string, title: string) => void;
   deleteEntry: (entry: DiaryEntry) => void;
+  favoriteEntry?: (id: string, favorite: boolean) => void;
 }) {
   const { audioUrl, coverUrl } = useEntryMedia(entry);
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(entry.title);
+  const isAudioPending = entry.generationStatus === "audio-pending";
 
   return (
     <article
       onClick={() => {
         if (!editing) openEntry(entry.id);
       }}
-      className="cursor-pointer rounded-[8px] border border-[#dfe6df] bg-white p-3 shadow-sm transition active:scale-[0.99]"
+      className="diary-entry"
     >
-      <div className="grid grid-cols-[112px_1fr] gap-3">
-        <CoverArt title={entry.title} coverUrl={coverUrl} compact />
-        <div className="min-w-0">
+      <div className="diary-entry__row">
+        <div className="diary-entry__cover">
+          {entry.audioBlobId ? (
+            <CoverArt title={entry.title} coverUrl={coverUrl} compact />
+          ) : (
+            <div className="diary-entry__note-cover">
+              {isAudioPending ? (
+                <Waves size={19} strokeWidth={1.7} />
+              ) : (
+                <PenLine size={17} strokeWidth={1.6} />
+              )}
+              <span>{isAudioPending ? "声音待完成" : "文字日记"}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="diary-entry__content">
           {editing ? (
             <div
-              className="flex gap-2"
+              className="diary-entry__edit"
               onClick={(event) => event.stopPropagation()}
             >
               <input
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                className="h-9 min-w-0 flex-1 rounded-[8px] border border-[#cfd8d1] px-3 text-sm outline-none"
+                className="diary-entry__input"
               />
               <button
                 type="button"
@@ -1192,21 +2452,32 @@ function NotebookEntryCard({
                 }}
                 aria-label="保存名称"
                 title="保存名称"
-                className="grid h-9 w-9 place-items-center rounded-full bg-[#263d3a] text-white"
+                className="diary-icon-button diary-icon-button--accent"
               >
-                <Check size={15} />
+                <Check size={14} />
               </button>
             </div>
           ) : (
-            <h3 className="truncate text-lg font-semibold text-[#20302d]">{entry.title}</h3>
+            <h3 className="diary-entry__title">{entry.title}</h3>
           )}
-          <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#68736f]">
-            {entry.summary}
-          </p>
+
+          <p className="diary-entry__summary">{entry.summary}</p>
+
           <div
-            className="mt-3 flex items-center gap-2"
+            className="diary-entry__tools"
             onClick={(event) => event.stopPropagation()}
           >
+            {favoriteEntry ? (
+              <button
+                type="button"
+                onClick={() => favoriteEntry(entry.id, !entry.favorite)}
+                aria-label={entry.favorite ? "取消收藏" : "收藏"}
+                title={entry.favorite ? "取消收藏" : "收藏"}
+                className={"diary-icon-button" + (entry.favorite ? " diary-icon-button--favorite" : "")}
+              >
+                <Heart size={16} fill={entry.favorite ? "currentColor" : "none"} />
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => {
@@ -1215,34 +2486,36 @@ function NotebookEntryCard({
               }}
               aria-label="重命名"
               title="重命名"
-              className="grid h-9 w-9 place-items-center rounded-full bg-[#edf2ee] text-[#47615b]"
+              className="diary-icon-button"
             >
-              <PenLine size={15} />
+              <PenLine size={14} />
             </button>
             <button
               type="button"
               onClick={() => deleteEntry(entry)}
               aria-label="删除"
               title="删除"
-              className="grid h-9 w-9 place-items-center rounded-full bg-[#fbebe7] text-[#bd6253]"
+              className="diary-icon-button diary-icon-button--danger"
             >
-              <Trash2 size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={() => openEntry(entry.id)}
-              aria-label="打开详情"
-              title="打开详情"
-              className="grid h-9 w-9 place-items-center rounded-full bg-[#edf2ee] text-[#47615b]"
-            >
-              <BookOpen size={15} />
+              <Trash2 size={14} />
             </button>
           </div>
         </div>
       </div>
-      <div onClick={(event) => event.stopPropagation()} className="mt-3">
-        <AudioPlayer src={audioUrl} label={entry.title} />
-      </div>
+
+      {entry.audioBlobId ? (
+        <div
+          onClick={(event) => event.stopPropagation()}
+          className="diary-entry__audio"
+        >
+          <AudioPlayer
+            src={audioUrl}
+            label={entry.title}
+            persistenceKey={entry.id}
+            artworkUrl={coverUrl}
+          />
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -1252,11 +2525,19 @@ function EntryDetailView({
   goBack,
   renameEntry,
   deleteEntry,
+  favoriteEntry,
+  retryAudioDiary,
+  autoPlay = false,
+  soundStyle = "warm",
 }: {
   entry?: DiaryEntry;
   goBack: () => void;
   renameEntry: (id: string, title: string) => void;
   deleteEntry: (entry: DiaryEntry) => void;
+  favoriteEntry: (id: string, favorite: boolean) => void;
+  retryAudioDiary: (entry: DiaryEntry) => void;
+  autoPlay?: boolean;
+  soundStyle?: CompanionPreferences["soundStyle"];
 }) {
   const { audioUrl, coverUrl } = useEntryMedia(entry);
   const [editing, setEditing] = useState(false);
@@ -1266,25 +2547,75 @@ function EntryDetailView({
     return (
       <>
         <BackHeader goBack={goBack} title="日记不存在" />
-        <section className="px-5 py-8 text-sm text-[#68736f]">这张卡片可能已经被删除。</section>
+        <section className="px-5 py-8 text-sm text-[#7a7754]">这张卡片可能已经被删除。</section>
       </>
     );
   }
+  const source = entry.source;
+  const isAudioPending = entry.generationStatus === "audio-pending";
 
   return (
     <>
       <BackHeader goBack={goBack} title={entry.title} />
-      <section className="space-y-5 px-5 py-5">
-        <CoverArt title={entry.title} summary={entry.summary} coverUrl={coverUrl} />
-        <AudioPlayer src={audioUrl} label={entry.title} />
+      <section className="diary-detail-page space-y-5 px-5 py-5">
+        {entry.audioBlobId ? (
+          <>
+            <CoverArt title={entry.title} summary={entry.summary} coverUrl={coverUrl} />
+            <AudioPlayer
+              src={audioUrl}
+              label={entry.title}
+              autoPlay={autoPlay}
+              persistenceKey={entry.id}
+              artworkUrl={coverUrl}
+            />
+          </>
+        ) : (
+          <div className="diary-text-entry-hero">
+            <p>{formatDateLabel(entry.date)} · {isAudioPending ? "文字已经留下" : "文字记录"}</p>
+            <h1>{entry.title}</h1>
+            <span>{entry.summary}</span>
+          </div>
+        )}
+        {isAudioPending ? (
+          <article className="diary-detail-pending">
+            <div>
+              <Waves size={20} aria-hidden="true" />
+              <span>声音还没有完成</span>
+              <p>原文已经安全留下，想继续时再回来就好。</p>
+            </div>
+            <button type="button" onClick={() => retryAudioDiary(entry)}>
+              继续准备声音
+            </button>
+          </article>
+        ) : null}
+        {source ? (
+          <article className="diary-detail-source">
+            <div className="diary-detail-source__meta">
+              <span>你写下的</span>
+              <time>{formatDateLabel(entry.date)}{source.mood ? ` · ${source.mood}` : ""}</time>
+            </div>
+            {source.title ? <h2>{source.title}</h2> : null}
+            <p>{source.content}</p>
+          </article>
+        ) : null}
 
-        <div className="rounded-[8px] border border-[#dfe6df] bg-white p-4 shadow-sm">
+        {source?.reply ? (
+          <article className="diary-detail-response">
+            <div className="diary-detail-response__top">
+              <span>Meloday 的回应</span>
+              <SpokenReplyButton text={source.reply} soundStyle={soundStyle} />
+            </div>
+            <p>{source.reply}</p>
+          </article>
+        ) : null}
+
+        <div className="healing-card rounded-[8px] p-4">
           {editing ? (
             <div className="flex gap-2">
               <input
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                className="h-10 min-w-0 flex-1 rounded-[8px] border border-[#cfd8d1] px-3 text-sm outline-none"
+                className="h-10 min-w-0 flex-1 rounded-[8px] border border-[#7a7754]/20 bg-[#fffff7]/80 px-3 text-sm outline-none focus:border-[#82b7eb]"
               />
               <button
                 type="button"
@@ -1294,7 +2625,7 @@ function EntryDetailView({
                 }}
                 aria-label="保存名称"
                 title="保存名称"
-                className="grid h-10 w-10 place-items-center rounded-full bg-[#263d3a] text-white"
+                className="healing-primary grid h-10 w-10 place-items-center rounded-full"
               >
                 <Check size={16} />
               </button>
@@ -1302,40 +2633,58 @@ function EntryDetailView({
           ) : (
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-medium text-[#d47d6a]">{formatDateLabel(entry.date)}</p>
-                <h2 className="mt-1 text-2xl font-semibold text-[#20302d]">{entry.title}</h2>
+                {entry.audioBlobId ? (
+                  <>
+                    <p className="text-[14px] font-medium text-[#6f9789]">{formatDateLabel(entry.date)}</p>
+                    <h2 className="mt-1 text-2xl font-semibold text-[#3f442f]">{entry.title}</h2>
+                  </>
+                ) : (
+                  <p className="text-sm leading-7 text-[#7a7754]">{entry.summary}</p>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setTitle(entry.title);
-                  setEditing(true);
-                }}
-                aria-label="重命名"
-                title="重命名"
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#edf2ee] text-[#47615b]"
-              >
-                <PenLine size={16} />
-              </button>
+              <div className="diary-detail-actions">
+                <button
+                  type="button"
+                  onClick={() => favoriteEntry(entry.id, !entry.favorite)}
+                  aria-label={entry.favorite ? "取消收藏" : "收藏"}
+                  title={entry.favorite ? "取消收藏" : "收藏"}
+                  className={entry.favorite ? "is-favorite" : undefined}
+                >
+                  <Heart size={17} fill={entry.favorite ? "currentColor" : "none"} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTitle(entry.title);
+                    setEditing(true);
+                  }}
+                  aria-label="重命名"
+                  title="重命名"
+                >
+                  <PenLine size={16} />
+                </button>
+              </div>
             </div>
           )}
-          <p className="mt-4 text-sm leading-7 text-[#68736f]">{entry.summary}</p>
+          {entry.audioBlobId ? (
+            <p className="mt-4 text-sm leading-7 text-[#7a7754]">{entry.summary}</p>
+          ) : null}
         </div>
 
-        <div className="rounded-[8px] border border-[#dfe6df] bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-[#20302d]">完整日记</h3>
-          <p className="mt-3 whitespace-pre-wrap text-[15px] leading-8 text-[#394a46]">
+        <article className="diary-detail-adaptation">
+          <h3>{source ? "声音日记文字" : "完整日记"}</h3>
+          <p>
             {entry.fullDiary}
           </p>
-        </div>
+        </article>
 
         <button
           type="button"
           onClick={() => deleteEntry(entry)}
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-[#efc8c1] bg-white text-sm font-medium text-[#bd6253]"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-[#9a675f]/24 bg-[#fffff7]/80 text-sm font-medium text-[#9a675f]"
         >
           <Trash2 size={16} />
-          删除这张卡片
+          删除这篇日记
         </button>
       </section>
     </>
@@ -1357,7 +2706,7 @@ function DraftDetailView({
     return (
       <>
         <BackHeader goBack={goBack} title="完整日记" />
-        <section className="px-5 py-8 text-sm text-[#68736f]">还没有生成可查看的卡片。</section>
+        <section className="px-5 py-8 text-sm text-[#7a7754]">还没有生成可查看的卡片。</section>
       </>
     );
   }
@@ -1368,13 +2717,13 @@ function DraftDetailView({
       <section className="space-y-5 px-5 py-5">
         <CoverArt title={draft.title} summary={draft.summary} coverUrl={draft.coverUrl} />
         <AudioPlayer src={draft.audioUrl} label={draft.title} />
-        <div className="rounded-[8px] border border-[#dfe6df] bg-white p-4 shadow-sm">
-          <h2 className="text-2xl font-semibold text-[#20302d]">{draft.title}</h2>
-          <p className="mt-3 text-sm leading-7 text-[#68736f]">{draft.summary}</p>
+        <div className="healing-card rounded-[8px] p-4">
+          <h2 className="text-2xl font-semibold text-[#3f442f]">{draft.title}</h2>
+          <p className="mt-3 text-sm leading-7 text-[#7a7754]">{draft.summary}</p>
         </div>
-        <div className="rounded-[8px] border border-[#dfe6df] bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-[#20302d]">完整日记</h3>
-          <p className="mt-3 whitespace-pre-wrap text-[15px] leading-8 text-[#394a46]">
+        <div className="healing-card rounded-[8px] p-4">
+          <h3 className="text-sm font-semibold text-[#3f442f]">完整日记</h3>
+          <p className="mt-3 whitespace-pre-wrap text-[15px] leading-8 text-[#4d5038]">
             {draft.fullDiary}
           </p>
         </div>
@@ -1382,7 +2731,7 @@ function DraftDetailView({
           type="button"
           onClick={saveCurrentDraft}
           disabled={isSavingDraft}
-          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#263d3a] px-4 text-sm font-medium text-white disabled:bg-[#aeb8b2]"
+          className="healing-primary inline-flex h-12 w-full items-center justify-center gap-2 rounded-full px-4 text-sm font-medium disabled:bg-[#b9b58e]"
         >
           {isSavingDraft ? <LoaderCircle size={16} className="animate-spin" /> : <Save size={16} />}
           保存当前版本
@@ -1392,78 +2741,20 @@ function DraftDetailView({
   );
 }
 
-const apiSettingsStorageKey = "meloday.api-settings.v1";
-
-type ApiSettings = {
-  deepseekApiKey: string;
-  minimaxApiKey: string;
-};
-
-function loadApiSettings(): ApiSettings {
-  if (typeof window === "undefined") {
-    return { deepseekApiKey: "", minimaxApiKey: "" };
-  }
-
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(apiSettingsStorageKey) || "{}");
-    return {
-      deepseekApiKey: typeof parsed.deepseekApiKey === "string" ? parsed.deepseekApiKey : "",
-      minimaxApiKey: typeof parsed.minimaxApiKey === "string" ? parsed.minimaxApiKey : "",
-    };
-  } catch {
-    return { deepseekApiKey: "", minimaxApiKey: "" };
-  }
-}
-
-function MineView() {
-  const [settings, setSettings] = useState<ApiSettings>(() => loadApiSettings());
-
-  function updateSetting(key: keyof ApiSettings, value: string) {
-    setSettings((current) => {
-      const next = { ...current, [key]: value };
-      window.localStorage.setItem(apiSettingsStorageKey, JSON.stringify(next));
-      return next;
-    });
-  }
-
-  return (
-    <section className="space-y-3 px-5 py-5">
-      <input
-        value={settings.deepseekApiKey}
-        onChange={(event) => updateSetting("deepseekApiKey", event.target.value)}
-        type="password"
-        autoComplete="off"
-        aria-label="DeepSeek API Key"
-        placeholder="DeepSeek API Key（对话与日记）"
-        className="h-12 w-full rounded-[8px] border border-[#dfe6df] bg-white px-3 text-[15px] text-[#20302d] outline-none transition focus:border-[#8fb3a8]"
-      />
-      <input
-        value={settings.minimaxApiKey}
-        onChange={(event) => updateSetting("minimaxApiKey", event.target.value)}
-        type="password"
-        autoComplete="off"
-        aria-label="Minimax API Key"
-        placeholder="MiniMax API Key（海螺音乐）"
-        className="h-12 w-full rounded-[8px] border border-[#dfe6df] bg-white px-3 text-[15px] text-[#20302d] outline-none transition focus:border-[#8fb3a8]"
-      />
-    </section>
-  );
-}
-
 function BackHeader({ goBack, title }: { goBack: () => void; title: string }) {
   return (
-    <header className="sticky top-0 z-10 border-b border-[#e1e8e1] bg-[#f8faf7]/92 px-4 py-4 backdrop-blur">
+    <header className="diary-back-header sticky top-0 z-10 border-b border-[#7a7754]/12 bg-[#fffff7]/78 px-4 py-4 backdrop-blur-xl">
       <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={goBack}
           aria-label="返回"
           title="返回"
-          className="grid h-10 w-10 place-items-center rounded-full bg-[#e9f0eb] text-[#47615b]"
+          className="healing-blue grid h-10 w-10 place-items-center rounded-full"
         >
           <ChevronLeft size={20} />
         </button>
-        <h1 className="min-w-0 truncate text-lg font-semibold text-[#20302d]">{title}</h1>
+        <h1 className="min-w-0 truncate text-lg font-semibold text-[#3f442f]">{title}</h1>
       </div>
     </header>
   );
@@ -1471,51 +2762,54 @@ function BackHeader({ goBack, title }: { goBack: () => void; title: string }) {
 
 function BottomNav({
   active,
-  goToday,
-  goNotebook,
+  goHome,
+  goDiary,
   goMine,
 }: {
-  active: "today" | "notebook" | "mine";
-  goToday: () => void;
-  goNotebook: () => void;
+  active: "home" | "diary" | "mine";
+  goHome: () => void;
+  goDiary: () => void;
   goMine: () => void;
 }) {
   const itemClass = (target: typeof active) =>
-    `grid h-12 w-12 place-items-center rounded-full transition ${
+    `relative flex h-full w-full flex-col items-center justify-center gap-1.5 text-[15px] font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#9bc7bb] ${
       active === target
-        ? "bg-[#263d3a] text-white shadow-sm"
-        : "text-[#52645f] hover:bg-[#eef2ee]"
+        ? "text-[#5f8f82]"
+        : "text-[#9aa6a2] hover:text-[#6f827c]"
     }`;
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-20 px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-2">
-      <div className="mx-auto flex w-fit items-center gap-2 rounded-full border border-[#dfe6df] bg-white/94 p-2 shadow-[0_14px_34px_rgba(50,70,65,0.16)] backdrop-blur">
+    <nav className="fixed inset-x-0 bottom-0 z-20 mx-auto w-full max-w-[900px] border-t border-[#dfe7e3] bg-[#fbfcfb]/98 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
+      <div className="grid h-[72px] w-full grid-cols-3 items-center">
         <button
           type="button"
-          onClick={goToday}
-          aria-label="写日记"
-          title="写日记"
-          className={itemClass("today")}
+          onClick={goHome}
+          aria-label="首页"
+          title="首页"
+          className={itemClass("home")}
         >
-          <PenLine size={19} />
+          <House size={20} strokeWidth={1.8} />
+          <span>此刻</span>
         </button>
         <button
           type="button"
-          onClick={goNotebook}
+          onClick={goDiary}
           aria-label="日记本"
           title="日记本"
-          className={itemClass("notebook")}
+          className={itemClass("diary")}
         >
-          <BookOpen size={19} />
+          <BookOpen size={20} strokeWidth={1.8} />
+          <span>日记</span>
         </button>
         <button
           type="button"
           onClick={goMine}
-          aria-label="我的"
-          title="我的"
+          aria-label="个人"
+          title="个人"
           className={itemClass("mine")}
         >
-          <UserRound size={19} />
+          <UserRound size={20} strokeWidth={1.8} />
+          <span>我的</span>
         </button>
       </div>
     </nav>
