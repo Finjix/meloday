@@ -1,6 +1,6 @@
 import type { ApiKeys, ChatMessage, CompanionPreferences, MomentContext } from "@/lib/types";
-import { generateAgentTurn, ServiceConfigError } from "@/lib/server/deepseek";
-
+import { generateAgentTurn } from "@/lib/server/deepseek";
+import { apiErrorResponse } from "@/lib/server/http";
 
 export const runtime = "nodejs";
 
@@ -14,12 +14,6 @@ function chunkText(text: string) {
     chunks.push(text.slice(index, index + 4));
   }
   return chunks;
-}
-
-function errorResponse(error: unknown) {
-  const message = error instanceof Error ? error.message : "Agent response failed.";
-  const status = error instanceof ServiceConfigError ? error.status : 502;
-  return Response.json({ error: message }, { status });
 }
 
 export async function POST(request: Request) {
@@ -75,6 +69,6 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    return errorResponse(error);
+    return apiErrorResponse(error, "Agent response failed.");
   }
 }

@@ -1,0 +1,86 @@
+/* Cover artwork */
+.cover-art {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  border-radius: 8px;
+  background: rgba(130, 183, 235, 0.28);
+  box-shadow: 0 4px 8px rgba(73, 78, 55, 0.12);
+}
+
+.cover-art--compact {
+  aspect-ratio: 4 / 3;
+}
+
+.cover-art--portrait {
+  aspect-ratio: 3 / 4;
+}
+
+.cover-art__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 247, 0) 36%, rgba(47, 51, 40, 0.66) 100%);
+}
+
+.cover-art__copy {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 16px;
+  color: #fff;
+}
+
+.cover-art__brand {
+  color: #f3ff9b;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.cover-art__title {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: normal;
+  line-height: 1.2;
+}
+
+.cover-art__title--compact {
+  font-size: 20px;
+}
+
+.cover-art__summary {
+  display: -webkit-box;
+  margin-top: 8px;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 14px;
+  line-height: 20px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.diary-entry__cover > .cover-art {
+  height: 100%;
+  border: 0;
+  border-radius: inherit;
+  box-shadow: none;
+}
+
+.diary-entry__cover .cover-art__copy {
+  padding: 8px;
+}
+
+.diary-entry__cover .cover-art__brand {
+  font-size: 8px;
+  letter-spacing: 0.12em;
+}
+
+.diary-detail-page > .cover-art {
+  border-radius: 20px;
+  box-shadow: none;
+}
+

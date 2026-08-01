@@ -10,9 +10,7 @@ type CoverArtProps = {
 export function CoverArt({ title, summary, coverUrl, compact = false }: CoverArtProps) {
   return (
     <div
-      className={`relative overflow-hidden rounded-[8px] border border-white/75 bg-[#82b7eb]/28 shadow-[0_4px_8px_rgba(73,78,55,0.12)] ${
-        compact ? "aspect-[4/3]" : "aspect-[3/4]"
-      }`}
+      className={`cover-art ${compact ? "cover-art--compact" : "cover-art--portrait"}`}
       style={{
         backgroundImage: coverUrl
           ? `linear-gradient(180deg, rgba(255,255,247,0.08), rgba(47,51,40,0.32)), url(${coverUrl})`
@@ -21,20 +19,18 @@ export function CoverArt({ title, summary, coverUrl, compact = false }: CoverArt
         backgroundPosition: "center",
       }}
     >
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,247,0)_36%,rgba(47,51,40,0.66)_100%)]" />
-      <div className="absolute inset-x-0 bottom-0 p-4 text-white">
-        <p className="text-[13px] font-medium tracking-[0.08em] text-[#f3ff9b]">
+      <div className="cover-art__overlay" />
+      <div className="cover-art__copy">
+        <p className="cover-art__brand">
           Meloday
         </p>
         <h3
-          className={`mt-1 break-words font-semibold leading-tight tracking-normal ${
-            compact ? "text-xl" : "text-3xl"
-          }`}
+          className={`cover-art__title ${compact ? "cover-art__title--compact" : ""}`}
         >
           {title}
         </h3>
         {summary ? (
-          <p className="mt-2 line-clamp-2 text-sm leading-5 text-white/88">{summary}</p>
+          <p className="cover-art__summary">{summary}</p>
         ) : null}
       </div>
     </div>

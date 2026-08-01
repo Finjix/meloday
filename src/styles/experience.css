@@ -206,13 +206,13 @@
   font-size: 15px;
 }
 
-.home-shell > div:first-child p,
-.home-shell .mb-4 > div > p,
-.home-shell .mb-4 > span {
+.home-shell > .home-header p,
+.home-options-heading__eyebrow,
+.home-options-heading__aside {
   font-size: 13px !important;
 }
 
-.home-shell .mode-card p {
+.home-shell .mode-card__detail {
   font-size: 14px !important;
   line-height: 1.65 !important;
 }

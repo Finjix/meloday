@@ -1,0 +1,98 @@
+/* Back headers and bottom navigation */
+.diary-back-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid rgba(122, 119, 84, 0.12);
+  background: rgba(255, 255, 247, 0.78);
+  padding: 16px;
+  backdrop-filter: blur(24px);
+}
+
+.diary-back-header__inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.diary-back-header__button {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+}
+
+.diary-back-header__title {
+  min-width: 0;
+  overflow: hidden;
+  color: #3f442f;
+  font-size: 18px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bottom-nav {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 20;
+  width: 100%;
+  max-width: 900px;
+  margin-inline: auto;
+  border-top: 1px solid #dfe7e3;
+  background: rgba(251, 252, 251, 0.98);
+  padding-bottom: env(safe-area-inset-bottom);
+  backdrop-filter: blur(24px);
+}
+
+.bottom-nav__grid {
+  display: grid;
+  width: 100%;
+  height: 72px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+}
+
+.bottom-nav__item {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #9aa6a2;
+  font-size: 15px;
+  font-weight: 500;
+  transition: color 160ms ease;
+}
+
+.bottom-nav__item:hover,
+.bottom-nav__item.is-inactive:hover {
+  color: #6f827c;
+}
+
+.bottom-nav__item.is-active {
+  color: #5f8f82;
+}
+
+.bottom-nav__item:focus-visible {
+  outline: 2px solid #9bc7bb;
+  outline-offset: -2px;
+}
+
+/* The original utility selector was only used to tune the compact cover. */
+@media (max-width: 560px) {
+  .generation-error-toast__actions {
+    gap: 8px;
+  }
+
+  .entry-detail-page,
+  .draft-detail-page {
+    padding-inline: 20px;
+  }
+}

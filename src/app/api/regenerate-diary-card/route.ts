@@ -2,18 +2,11 @@ import type { ApiKeys, CardPayload, CompanionPreferences, MomentContext } from "
 import {
   assembleCardPayload,
   regenerateCardContent,
-  ServiceConfigError,
 } from "@/lib/server/deepseek";
-
+import { apiErrorResponse } from "@/lib/server/http";
 import { assertMiniMaxApiKey, generateInstrumentalMusic } from "@/lib/server/minimax";
 
 export const runtime = "nodejs";
-
-function errorResponse(error: unknown) {
-  const message = error instanceof Error ? error.message : "Regeneration failed.";
-  const status = error instanceof ServiceConfigError ? error.status : 502;
-  return Response.json({ error: message }, { status });
-}
 
 export async function POST(request: Request) {
   try {
@@ -50,6 +43,6 @@ export async function POST(request: Request) {
       },
     );
   } catch (error) {
-    return errorResponse(error);
+    return apiErrorResponse(error, "Regeneration failed.");
   }
 }

@@ -15,11 +15,12 @@ import {
   UserRound,
 } from "lucide-react";
 import Image from "next/image";
+import melodayLogo from "@/assets/brand/meloday-logo.png";
 import { useEffect, useRef, useState } from "react";
-import { AudioPlayer } from "@/components/AudioPlayer";
-import { CoverArt } from "@/components/CoverArt";
+import { AudioPlayer } from "@/components/media/AudioPlayer";
+import { CoverArt } from "@/components/media/CoverArt";
 import { createMelodayArchive, restoreMelodayArchive } from "@/lib/backup";
-import type { ServiceAvailability } from "@/lib/client-api";
+import type { ServiceAvailability } from "@/lib/api/client";
 import {
   addCompanionMemory,
   deleteCompanionMemory,
@@ -422,7 +423,7 @@ function MineDataPanel({
           ref={fileInputRef}
           type="file"
           accept=".json,application/json"
-          className="sr-only"
+          className="visually-hidden"
           onChange={(event) => void handleImport(event.target.files?.[0])}
         />
 
@@ -666,7 +667,7 @@ function MineAboutPanel({ goBack }: { goBack: () => void }) {
           }}
         >
           <Image
-            src="/brand/meloday-logo.png"
+            src={melodayLogo}
             alt="Meloday"
             width={1500}
             height={669}
@@ -831,7 +832,7 @@ export function MineView({
         </button>
       </section>
 
-      <section className="mine-section mine-settings">
+      <section className="mine-section">
         <div className="mine-section__heading">
           <div>
             <h2>设置</h2>
