@@ -173,12 +173,6 @@
 .diary-detail-page .healing-primary { background: #e8f1ed; color: #648c7f; box-shadow: none; }
 .diary-detail-page .healing-blue { background: #edf4f0; color: #668e81; }
 
-.healing-phone {
-  max-width: min(100%, 900px) !important;
-}
-.healing-phone > nav {
-  max-width: min(100%, 900px) !important;
-}
 .mode-detail-page {
   min-height: calc(100dvh - 68px - env(safe-area-inset-bottom));
   background: #fbfcfb;
