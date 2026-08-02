@@ -2,18 +2,11 @@ import type { ApiKeys, ChatMessage, CompanionPreferences, MomentContext } from "
 import {
   assembleCardPayload,
   generateCardContent,
-  ServiceConfigError,
 } from "@/lib/server/deepseek";
-
+import { apiErrorResponse } from "@/lib/server/http";
 import { assertMiniMaxApiKey, generateInstrumentalMusic } from "@/lib/server/minimax";
 
 export const runtime = "nodejs";
-
-function errorResponse(error: unknown) {
-  const message = error instanceof Error ? error.message : "Card generation failed.";
-  const status = error instanceof ServiceConfigError ? error.status : 502;
-  return Response.json({ error: message }, { status });
-}
 
 export async function POST(request: Request) {
   try {
@@ -38,6 +31,6 @@ export async function POST(request: Request) {
       headers: { "Cache-Control": "no-store" },
     });
   } catch (error) {
-    return errorResponse(error);
+    return apiErrorResponse(error, "Card generation failed.");
   }
 }

@@ -1,0 +1,121 @@
+:root {
+  --background: #f4f7f3;
+  --foreground: #19352e;
+  --mist: #fffff7;
+  --glow: #f3ff9b;
+  --sky: #82b7eb;
+  --olive: #7a7754;
+  --ink: #2f3328;
+  --line: rgba(122, 119, 84, 0.18);
+  --glass: rgba(255, 255, 247, 0.76);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
+}
+
+button,
+textarea,
+input {
+  font: inherit;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.diary-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.diary-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.healing-root {
+  background:
+    linear-gradient(145deg, rgba(130, 183, 235, 0.28) 0%, transparent 34%),
+    linear-gradient(215deg, rgba(243, 255, 155, 0.52) 0%, transparent 36%),
+    linear-gradient(180deg, #fffff7 0%, #f7f9eb 48%, #eaf2ef 100%);
+}
+
+.healing-phone {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 247, 0.94) 0%, rgba(255, 255, 247, 0.82) 46%, rgba(238, 246, 239, 0.94) 100%);
+  isolation: isolate;
+}
+
+.healing-phone::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(118deg, rgba(243, 255, 155, 0.58), transparent 38%),
+    linear-gradient(164deg, transparent 45%, rgba(130, 183, 235, 0.26) 76%, transparent 100%);
+}
+
+.healing-card {
+  border: 1px solid rgba(122, 119, 84, 0.18);
+  background: rgba(255, 255, 247, 0.78);
+  box-shadow: 0 4px 8px rgba(73, 78, 55, 0.1);
+  backdrop-filter: blur(18px);
+}
+
+.healing-surface {
+  border: 1px solid rgba(122, 119, 84, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 247, 0.88), rgba(255, 255, 247, 0.68));
+  box-shadow: 0 4px 8px rgba(73, 78, 55, 0.09);
+  backdrop-filter: blur(16px);
+}
+
+.healing-primary {
+  background: linear-gradient(135deg, #7a7754 0%, #3d432e 100%);
+  color: #fffff7;
+  box-shadow: 0 4px 8px rgba(75, 79, 51, 0.2);
+}
+
+.healing-accent {
+  background: #f3ff9b;
+  color: #4a4c33;
+}
+
+.healing-blue {
+  background: rgba(130, 183, 235, 0.24);
+  color: #446f96;
+}
+
+.healing-rule {
+  background: linear-gradient(90deg, transparent, rgba(122, 119, 84, 0.22), transparent);
+}
+
+@keyframes diaryDateIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes draftCardIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+

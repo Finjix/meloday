@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import "./globals.css";
-import "./diary-hub.css";
-import "./experience.css";
+import "@/styles/index.css";
 
 export const metadata: Metadata = {
   title: "Meloday",
@@ -14,8 +12,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" className="h-full antialiased" suppressHydrationWarning>
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="zh-CN" className="app-html" suppressHydrationWarning>
+      <body className="app-body">{children}</body>
     </html>
   );
 }

@@ -39,7 +39,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-.vercel
-
 # local browser/image generation scratch files
 /tmp/
