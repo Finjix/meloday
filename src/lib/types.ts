@@ -39,7 +39,7 @@ export type AgentTurnResult = {
 
 export type CoverMeta = {
   query: string;
-  source: "deepseek-generated";
+  source: "minimax-generated";
   description: string;
   palette: {
     from: string;
@@ -108,7 +108,6 @@ export type AgentStreamLine =
   | { type: "done" };
 
 export type ApiKeys = {
-  deepseekApiKey?: string;
   minimaxApiKey?: string;
 };
 

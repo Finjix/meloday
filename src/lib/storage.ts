@@ -132,7 +132,7 @@ export function savePendingDiary(source: DiarySource, existingId?: string) {
     coverBlobId: existing?.coverBlobId ?? "",
     coverMeta: existing?.coverMeta ?? {
       query: "a quiet personal diary memory",
-      source: "deepseek-generated",
+      source: "minimax-generated",
       description: "一页安静留下的声音日记。",
       palette: {
         from: "#edf4ef",

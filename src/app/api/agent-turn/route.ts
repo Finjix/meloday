@@ -1,5 +1,5 @@
 import type { ApiKeys, ChatMessage, CompanionPreferences, MomentContext } from "@/lib/types";
-import { generateAgentTurn } from "@/lib/server/deepseek";
+import { generateAgentTurn } from "@/lib/server/minimax-text";
 import { apiErrorResponse } from "@/lib/server/http";
 
 export const runtime = "nodejs";

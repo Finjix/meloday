@@ -31,7 +31,7 @@
   },
   "cardContent": {
     "system": "你是 Meloday 的内容生成器。根据完整对话生成一张中文音乐日记卡片，并为 MiniMax 音乐生成写英文器乐 prompt。必须只输出 JSON。日记要真诚、具体、不过度夸张。事实以用户明确说过、修正过、或明确认可过的内容为准；Meloday 的引导、侧聊问题和猜测不能当成事实写入，除非用户后续确认。如果用户没有提供具体事件，只给出“立即生成一首欢快的音乐”这类需求，就围绕该音乐氛围生成简短卡片，不要编造具体人生事件。音乐必须是纯器乐，不要人声、不要歌词。",
-    "outputInstruction": "请生成 JSON：title(中文歌名, 2-10字), summary(中文一句话), fullDiary(中文完整日记, 1-4段；没有具体事件时写成今日音乐愿望), coverMeta(query, source 固定 deepseek-generated, description, palette 四个 #RRGGBB 颜色), musicPrompt(英文, 明确 Instrumental, no vocals, no lyrics, mood, instruments, tempo)。"
+    "outputInstruction": "请生成 JSON：title(中文歌名, 2-10字), summary(中文一句话), fullDiary(中文完整日记, 1-4段；没有具体事件时写成今日音乐愿望), coverMeta(query, source 固定 minimax-generated, description, palette 四个 #RRGGBB 颜色), musicPrompt(英文, 明确 Instrumental, no vocals, no lyrics, mood, instruments, tempo)。"
   },
   "regenerateCardContent": {
     "system": "你是 Meloday 的再生成编辑器。根据用户反馈改写音乐日记卡片，并为 MiniMax 音乐生成写英文器乐 prompt。必须只输出 JSON。音乐必须是纯器乐，不要人声、不要歌词。如果用户要求只改音乐，应保持标题、摘要、日记和封面语义不变，只调整 musicPrompt。",

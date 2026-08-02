@@ -1,6 +1,9 @@
-import { createDeepSeek } from "@ai-sdk/deepseek";
-import { generateObject, jsonSchema, type Schema } from "ai";
-import deepseekPrompts from "@/data/deepseek-prompts.json";
+import minimaxPrompts from "@/data/minimax-prompts.json";
+import {
+  getMiniMaxApiKey,
+  minimaxTextEndpoint,
+  minimaxTextModelId,
+} from "@/lib/server/minimax";
 
 import type {
   AgentTurnResult,
@@ -13,12 +16,6 @@ import type {
   MomentContext,
 } from "@/lib/types";
 
-export const deepseekModelId = process.env.DEEPSEEK_MODEL ?? "deepseek-v4-flash";
-
-export class ServiceConfigError extends Error {
-  status = 400;
-}
-
 function makeId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
 }
@@ -30,18 +27,6 @@ function todayInShanghai() {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
-}
-
-function getDeepSeekApiKey(apiKeys?: ApiKeys) {
-  const key = process.env.DEEPSEEK_API_KEY || apiKeys?.deepseekApiKey;
-  if (!key?.trim()) {
-    throw new ServiceConfigError("缺少 DeepSeek API Key。请配置 DEEPSEEK_API_KEY，或在“我的”页填写。");
-  }
-  return key.trim();
-}
-
-function getDeepSeekModel(apiKeys?: ApiKeys) {
-  return createDeepSeek({ apiKey: getDeepSeekApiKey(apiKeys) })(deepseekModelId);
 }
 
 function conversationText(messages: ChatMessage[]) {
@@ -177,7 +162,7 @@ function normalizeCoverMeta(value: Partial<CoverMeta> | undefined, title: string
       typeof value?.query === "string" && value.query.trim()
         ? value.query.trim().slice(0, 180)
         : `${title}, quiet mobile diary cover`,
-    source: "deepseek-generated",
+    source: "minimax-generated",
     description:
       typeof value?.description === "string" && value.description.trim()
         ? value.description.trim().slice(0, 260)
@@ -199,32 +184,6 @@ function requiredText(value: unknown, fallback: string, maxLength: number) {
 
 type AgentTurnDraft = Omit<AgentTurnResult, "replyCount">;
 
-const agentTurnSchema = jsonSchema<AgentTurnDraft>({
-  type: "object",
-  additionalProperties: false,
-  required: ["action", "segments", "collected", "readyToGenerate"],
-  properties: {
-    action: { type: "string", enum: ["question", "generate"] },
-    segments: {
-      type: "array",
-      items: { type: "string" },
-    },
-    readyToGenerate: { type: "boolean" },
-    collected: {
-      type: "object",
-      additionalProperties: false,
-      required: ["event", "emotion", "need", "musicDirection", "details"],
-      properties: {
-        event: { type: "boolean" },
-        emotion: { type: "boolean" },
-        need: { type: "boolean" },
-        musicDirection: { type: "boolean" },
-        details: { type: "boolean" },
-      },
-    },
-  },
-});
-
 type CardContent = {
   title: string;
   summary: string;
@@ -233,64 +192,97 @@ type CardContent = {
   musicPrompt: string;
 };
 
-const cardContentSchema = jsonSchema<CardContent>({
-  type: "object",
-  additionalProperties: false,
-  required: ["title", "summary", "fullDiary", "coverMeta", "musicPrompt"],
-  properties: {
-    title: { type: "string" },
-    summary: { type: "string" },
-    fullDiary: { type: "string" },
-    musicPrompt: { type: "string" },
-    coverMeta: {
-      type: "object",
-      additionalProperties: false,
-      required: ["query", "source", "description", "palette"],
-      properties: {
-        query: { type: "string" },
-        source: { type: "string", enum: ["deepseek-generated"] },
-        description: { type: "string" },
-        palette: {
-          type: "object",
-          additionalProperties: false,
-          required: ["from", "via", "to", "accent"],
-          properties: {
-            from: { type: "string" },
-            via: { type: "string" },
-            to: { type: "string" },
-            accent: { type: "string" },
-          },
-        },
-      },
-    },
-  },
-});
+type MiniMaxTextResponse = {
+  choices?: Array<{
+    message?: {
+      content?: string | null;
+    };
+  }>;
+  base_resp?: {
+    status_code?: number;
+    status_msg?: string;
+  };
+};
+
+function parseJsonObject<T>(content: string): T {
+  const withoutFence = content
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
+  const start = withoutFence.indexOf("{");
+  const end = withoutFence.lastIndexOf("}");
+  const jsonText = start >= 0 && end > start
+    ? withoutFence.slice(start, end + 1)
+    : withoutFence;
+
+  try {
+    const parsed = JSON.parse(jsonText) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("not an object");
+    }
+    return parsed as T;
+  } catch {
+    throw new Error("MiniMax 文本生成失败：模型返回的 JSON 无法解析。");
+  }
+}
 
 async function generateStructuredObject<T>({
   apiKeys,
   system,
   prompt,
-  schema,
 }: {
   apiKeys?: ApiKeys;
   system: string;
   prompt: string;
-  schema: Schema<T>;
 }) {
-  const result = await generateObject({
-    model: getDeepSeekModel(apiKeys),
-    schema,
-    system,
-    prompt,
-    temperature: 0.5,
-    maxRetries: 1,
-    providerOptions: {
-      deepseek: {
-        thinking: { type: "disabled" },
-      },
+  const response = await fetch(minimaxTextEndpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getMiniMaxApiKey(apiKeys)}`,
     },
+    body: JSON.stringify({
+      model: minimaxTextModelId,
+      messages: [
+        { role: "system", content: system },
+        {
+          role: "user",
+          content: `${prompt}\n\n请严格只输出一个 JSON 对象，不要输出 Markdown 代码块或额外解释。`,
+        },
+      ],
+      temperature: 0.5,
+      max_completion_tokens: 8192,
+      stream: false,
+    }),
   });
-  return result.object;
+
+  let payload: MiniMaxTextResponse | undefined;
+  try {
+    payload = (await response.json()) as MiniMaxTextResponse;
+  } catch {
+    payload = undefined;
+  }
+
+  if (!response.ok) {
+    throw new Error(`MiniMax 文本生成失败（HTTP ${response.status}）。`);
+  }
+
+  const statusCode = payload?.base_resp?.status_code ?? 0;
+  if (statusCode !== 0) {
+    const message = payload?.base_resp?.status_msg || "未知错误";
+    if (statusCode === 2049 || /invalid api key/i.test(message)) {
+      throw new Error("MiniMax 文本生成失败：invalid api key。");
+    }
+    throw new Error(`MiniMax 文本生成失败：${message}`);
+  }
+
+  const content = payload?.choices?.[0]?.message?.content;
+  if (!content?.trim()) {
+    throw new Error("MiniMax 文本生成失败：响应中没有文本内容。");
+  }
+
+  return parseJsonObject<T>(content);
 }
 
 function normalizeSegments(value: unknown, fallback: string[], maxLength = 420) {
@@ -317,10 +309,9 @@ export async function generateAgentTurn(
 ) {
   const previousAgentReplyCount = countCompletedAgentReplies(messages);
   const shouldGenerateNow = requestsImmediateGeneration(lastUserText(messages));
-  const agentTurnPrompt = deepseekPrompts.agentTurn;
+  const agentTurnPrompt = minimaxPrompts.agentTurn;
   const object = await generateStructuredObject<AgentTurnDraft>({
     apiKeys,
-    schema: agentTurnSchema,
     system: [
       agentTurnPrompt.systemRules.join(" "),
       companionPreferenceGuidance(preferences).reply,
@@ -401,9 +392,8 @@ export async function generateCardContent(
   const text = userText(messages);
   const object = await generateStructuredObject<CardContent>({
     apiKeys,
-    schema: cardContentSchema,
-    system: deepseekPrompts.cardContent.system,
-    prompt: `完整对话：\n${conversationText(messages)}\n\n用户原始素材：\n${text}\n\n此刻环境：${momentContextGuidance(momentContext)}\n\n${companionMemoryGuidance(memories)}\n\n声音偏好：${companionPreferenceGuidance(preferences).sound}\n\n${deepseekPrompts.cardContent.outputInstruction}`,
+    system: minimaxPrompts.cardContent.system,
+    prompt: `完整对话：\n${conversationText(messages)}\n\n用户原始素材：\n${text}\n\n此刻环境：${momentContextGuidance(momentContext)}\n\n${companionMemoryGuidance(memories)}\n\n声音偏好：${companionPreferenceGuidance(preferences).sound}\n\n${minimaxPrompts.cardContent.outputInstruction}`,
   });
 
   return normalizeCardContent(object, text);
@@ -423,15 +413,14 @@ export async function regenerateCardContent(
   );
   const object = await generateStructuredObject<CardContent>({
     apiKeys,
-    schema: cardContentSchema,
-    system: deepseekPrompts.regenerateCardContent.system,
+    system: minimaxPrompts.regenerateCardContent.system,
     prompt: `当前卡片：\n${JSON.stringify({
       title: current.title,
       summary: current.summary,
       fullDiary: current.fullDiary,
       coverMeta: current.coverMeta,
       musicPrompt: current.musicPrompt,
-    })}\n\n用户反馈：${normalizedFeedback}\n\n此刻环境：${momentContextGuidance(momentContext)}\n\n${companionMemoryGuidance(memories)}\n\n声音偏好：${companionPreferenceGuidance(preferences).sound}\n\n${deepseekPrompts.regenerateCardContent.outputInstruction}`,
+    })}\n\n用户反馈：${normalizedFeedback}\n\n此刻环境：${momentContextGuidance(momentContext)}\n\n${companionMemoryGuidance(memories)}\n\n声音偏好：${companionPreferenceGuidance(preferences).sound}\n\n${minimaxPrompts.regenerateCardContent.outputInstruction}`,
   });
 
   const next = normalizeCardContent(object, current.fullDiary);

@@ -13,22 +13,19 @@ import { loadCompanionPreferences } from "@/lib/preferences";
 
 const apiSettingsStorageKey = "meloday.api-settings.v1";
 
-export type ServiceAvailability = {
-  conversation: "included" | "device" | "missing";
-  sound: "included" | "device" | "missing";
-};
+export type ServiceAvailability = "included" | "device" | "missing";
 
 function readApiKeys(): ApiKeys | undefined {
   if (typeof window === "undefined") return undefined;
 
   try {
     const parsed = JSON.parse(window.localStorage.getItem(apiSettingsStorageKey) || "{}");
-    return {
-      deepseekApiKey:
-        typeof parsed.deepseekApiKey === "string" ? parsed.deepseekApiKey.trim() : undefined,
+    const settings = {
       minimaxApiKey:
         typeof parsed.minimaxApiKey === "string" ? parsed.minimaxApiKey.trim() : undefined,
     };
+    window.localStorage.setItem(apiSettingsStorageKey, JSON.stringify(settings));
+    return settings;
   } catch {
     return undefined;
   }
@@ -36,36 +33,21 @@ function readApiKeys(): ApiKeys | undefined {
 
 export async function requestServiceAvailability(): Promise<ServiceAvailability> {
   const localKeys = readApiKeys();
-  let included = { conversation: false, sound: false };
+  let included = false;
 
   try {
     const response = await fetch("/api/service-status", { cache: "no-store" });
     if (response.ok) {
       const body = (await response.json()) as {
-        conversation?: boolean;
-        sound?: boolean;
+        available?: boolean;
       };
-      included = {
-        conversation: body.conversation === true,
-        sound: body.sound === true,
-      };
+      included = body.available === true;
     }
   } catch {
     // Local device connections can still be used while status lookup is unavailable.
   }
 
-  return {
-    conversation: included.conversation
-      ? "included"
-      : localKeys?.deepseekApiKey
-        ? "device"
-        : "missing",
-    sound: included.sound
-      ? "included"
-      : localKeys?.minimaxApiKey
-        ? "device"
-        : "missing",
-  };
+  return included ? "included" : localKeys?.minimaxApiKey ? "device" : "missing";
 }
 
 function hexToBlob(hex: string, mimeType: string) {

@@ -45,7 +45,6 @@ type MineViewProps = {
 };
 
 type ApiSettings = {
-  deepseekApiKey: string;
   minimaxApiKey: string;
 };
 
@@ -75,19 +74,19 @@ function formatEntryDate(date: string) {
 
 function loadApiSettings(): ApiSettings {
   if (typeof window === "undefined") {
-    return { deepseekApiKey: "", minimaxApiKey: "" };
+    return { minimaxApiKey: "" };
   }
 
   try {
     const parsed = JSON.parse(window.localStorage.getItem(apiSettingsStorageKey) || "{}");
-    return {
-      deepseekApiKey:
-        typeof parsed.deepseekApiKey === "string" ? parsed.deepseekApiKey : "",
+    const settings = {
       minimaxApiKey:
         typeof parsed.minimaxApiKey === "string" ? parsed.minimaxApiKey : "",
     };
+    window.localStorage.setItem(apiSettingsStorageKey, JSON.stringify(settings));
+    return settings;
   } catch {
-    return { deepseekApiKey: "", minimaxApiKey: "" };
+    return { minimaxApiKey: "" };
   }
 }
 
@@ -541,7 +540,7 @@ function MineMemoriesPanel({ goBack }: { goBack: () => void }) {
     </>
   );
 }
-function serviceStatusLabel(status?: ServiceAvailability["conversation"]) {
+function serviceStatusLabel(status?: ServiceAvailability | null) {
   if (status === "included") return "已准备好";
   if (status === "device") return "使用此设备连接";
   if (status === "missing") return "等待连接";
@@ -559,23 +558,14 @@ function MineServicesPanel({
 }) {
   const [settings, setSettings] = useState<ApiSettings>(() => loadApiSettings());
 
-  const conversationStatus =
-    availability?.conversation === "included"
-      ? "included"
-      : settings.deepseekApiKey.trim()
-        ? "device"
-        : availability?.conversation;
-  const soundStatus =
-    availability?.sound === "included"
+  const serviceStatus =
+    availability === "included"
       ? "included"
       : settings.minimaxApiKey.trim()
         ? "device"
-        : availability?.sound;
-  const bothReady =
-    conversationStatus !== undefined &&
-    soundStatus !== undefined &&
-    conversationStatus !== "missing" &&
-    soundStatus !== "missing";
+        : availability;
+  const serviceReady =
+    serviceStatus !== undefined && serviceStatus !== "missing";
 
   function updateSetting(key: keyof ApiSettings, value: string) {
     setSettings((current) => {
@@ -590,49 +580,29 @@ function MineServicesPanel({
       <MineSubHeader title="服务连接" goBack={goBack} />
       <section className="mine-panel-page">
         <header className="mine-panel-intro">
-          <span>{bothReady ? "已经准备好" : "完成一次连接"}</span>
-          <h2>{bothReady ? "回应和声音，都可以使用。" : "让回应和声音都准备好。"}</h2>
-          <p>Meloday 已经提供连接时，不需要填写任何内容。</p>
+          <span>{serviceReady ? "已经准备好" : "完成一次连接"}</span>
+          <h2>{serviceReady ? "回应和声音，都可以使用。" : "连接 MiniMax 服务。"}</h2>
+          <p>一把 MiniMax Key 同时用于回应、日记和声音生成。</p>
         </header>
 
         <div className="mine-service-overview" aria-label="服务连接状态">
           <div>
-            <span><i aria-hidden="true" />回应与日记</span>
-            <strong>{serviceStatusLabel(conversationStatus)}</strong>
-          </div>
-          <div>
-            <span><i aria-hidden="true" />专属声音</span>
-            <strong>{serviceStatusLabel(soundStatus)}</strong>
+            <span><i aria-hidden="true" />MiniMax 服务</span>
+            <strong>{serviceStatusLabel(serviceStatus)}</strong>
           </div>
         </div>
 
         <details
           className="mine-service-custom"
-          open={conversationStatus === "missing" || soundStatus === "missing" ? true : undefined}
+          open={serviceStatus === "missing" ? true : undefined}
         >
           <summary>使用自己的连接</summary>
           <p>只在本地开发或自定义服务时使用，内容仅保存在当前浏览器。</p>
 
           <label className="mine-secret-field">
             <span>
-              <strong>回应服务</strong>
-              <small>{serviceStatusLabel(conversationStatus)}</small>
-            </span>
-            <input
-              value={settings.deepseekApiKey}
-              onChange={(event) => updateSetting("deepseekApiKey", event.target.value)}
-              onBlur={() => void servicesChanged()}
-              type="password"
-              autoComplete="off"
-              aria-label="回应服务密钥"
-              placeholder="粘贴服务密钥"
-            />
-          </label>
-
-          <label className="mine-secret-field">
-            <span>
-              <strong>声音服务</strong>
-              <small>{serviceStatusLabel(soundStatus)}</small>
+              <strong>MiniMax API Key</strong>
+              <small>{serviceStatusLabel(serviceStatus)}</small>
             </span>
             <input
               value={settings.minimaxApiKey}
@@ -640,7 +610,7 @@ function MineServicesPanel({
               onBlur={() => void servicesChanged()}
               type="password"
               autoComplete="off"
-              aria-label="声音服务密钥"
+              aria-label="MiniMax API Key"
               placeholder="粘贴服务密钥"
             />
           </label>

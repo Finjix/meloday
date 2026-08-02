@@ -2,7 +2,7 @@ import type { ApiKeys, ChatMessage, CompanionPreferences, MomentContext } from "
 import {
   assembleCardPayload,
   generateCardContent,
-} from "@/lib/server/deepseek";
+} from "@/lib/server/minimax-text";
 import { apiErrorResponse } from "@/lib/server/http";
 import { assertMiniMaxApiKey, generateInstrumentalMusic } from "@/lib/server/minimax";
 
