@@ -1,4 +1,4 @@
-import { ServiceConfigError } from "@/lib/server/deepseek";
+import { ServiceConfigError } from "@/lib/server/errors";
 
 export function apiErrorResponse(error: unknown, fallback: string) {
   const message = error instanceof Error ? error.message : fallback;

@@ -467,7 +467,7 @@ export default function HomeApp() {
   }, [messages]);
 
   async function runGeneration(conversation: ChatMessage[]) {
-    if (serviceAvailability?.sound === "missing") {
+    if (serviceAvailability === "missing") {
       setView({ name: "today" });
       setGeneration({
         running: false,
@@ -496,7 +496,7 @@ export default function HomeApp() {
   }
 
   async function runRegenerationFromMain(card: GeneratedCard, feedback: string) {
-    if (serviceAvailability?.sound === "missing") {
+    if (serviceAvailability === "missing") {
       setView({ name: "today" });
       setGeneration({
         running: false,
@@ -578,7 +578,7 @@ export default function HomeApp() {
   async function submitMessage(contentOverride?: string) {
     const content = (contentOverride ?? input).trim();
     if (!content || isAgentBusy || generation?.running) return;
-    if (serviceAvailability?.conversation === "missing") {
+    if (serviceAvailability === "missing") {
       setView({ name: "mine", panel: "services" });
       return;
     }
@@ -866,7 +866,7 @@ export default function HomeApp() {
               setInput={setInput}
               submitMessage={submitMessage}
               generation={generation}
-              soundNeedsConnection={serviceAvailability?.sound === "missing"}
+              serviceNeedsConnection={serviceAvailability === "missing"}
               openServices={() => {
                 setGeneration(null);
                 setView({ name: "mine", panel: "services" });
@@ -1013,16 +1013,13 @@ function HomeDashboardView({
   openDiaryCompose: () => void;
   openMode: (mode: ModeKey) => void;
 }) {
-  const conversationNeedsConnection = serviceAvailability?.conversation === "missing";
-  const soundNeedsConnection = serviceAvailability?.sound === "missing";
-  const connectionNeedsAttention = conversationNeedsConnection || soundNeedsConnection;
+  const serviceNeedsConnection = serviceAvailability === "missing";
+  const connectionNeedsAttention = serviceNeedsConnection;
   const connectionLabel = serviceAvailability === null
     ? "正在确认"
-    : conversationNeedsConnection
+    : serviceNeedsConnection
       ? "等待连接"
-      : soundNeedsConnection
-        ? "声音待连接"
-        : "在这里";
+      : "在这里";
   const momentDateLabel = momentContext
     ? Number(momentContext.localDate.slice(5, 7)) +
       "月" +
@@ -1116,30 +1113,30 @@ function HomeDashboardView({
 
       <button
         type="button"
-        onClick={conversationNeedsConnection ? openServices : openRadio}
+        onClick={serviceNeedsConnection ? openServices : openRadio}
         className="premium-hero home-hero"
       >
         <div className="premium-hero__content">
           <div className="premium-hero__status-row">
             <div className="premium-hero__badge">
               <span className="premium-hero__dot" />
-              {conversationNeedsConnection ? "开始前" : hasConversation ? "上次聊到这里" : "此刻声场"}
+              {serviceNeedsConnection ? "开始前" : hasConversation ? "上次聊到这里" : "此刻声场"}
             </div>
           </div>
 
           <div>
             <p className="premium-hero__eyebrow">
-              {conversationNeedsConnection ? "完成一次连接" : hasConversation ? "对话已经为你留着" : "为此刻生成"}
+              {serviceNeedsConnection ? "完成一次连接" : hasConversation ? "对话已经为你留着" : "为此刻生成"}
             </p>
             <h2 className="premium-hero__title">
-              {conversationNeedsConnection
+              {serviceNeedsConnection
                 ? "准备好回应和声音"
                 : hasConversation
                   ? "没说完的话，可以从这里继续"
                   : "说说现在，听见只属于你的声音"}
             </h2>
             <p className="premium-hero__description">
-              {conversationNeedsConnection
+              {serviceNeedsConnection
                 ? "完成后，就可以直接说出现在的感觉。"
                 : hasConversation
                   ? "不用重新讲一遍，接着刚才的感觉说就好。"
@@ -1149,7 +1146,7 @@ function HomeDashboardView({
 
           <div className="premium-hero__footer">
             <span className="premium-hero__label">
-              {conversationNeedsConnection ? "去完成连接" : hasConversation ? "继续聊" : "从一句话开始"}
+              {serviceNeedsConnection ? "去完成连接" : hasConversation ? "继续聊" : "从一句话开始"}
             </span>
             <span className="premium-hero__play">
               <Play size={17} className="icon-leading" fill="currentColor" />
@@ -1636,7 +1633,7 @@ function TodayView({
   setInput,
   submitMessage,
   generation,
-  soundNeedsConnection,
+  serviceNeedsConnection,
   openServices,
   retryGeneration,
   draft,
@@ -1654,7 +1651,7 @@ function TodayView({
   setInput: React.Dispatch<React.SetStateAction<string>>;
   submitMessage: (contentOverride?: string) => void;
   generation: { running: boolean; error?: string } | null;
-  soundNeedsConnection: boolean;
+  serviceNeedsConnection: boolean;
   openServices: () => void;
   retryGeneration: () => void;
   draft: GeneratedCard | null;
@@ -1885,7 +1882,7 @@ function TodayView({
       {generation?.error ? (
         <GenerationErrorToast
           message={generation.error}
-          connectionNeeded={soundNeedsConnection}
+          connectionNeeded={serviceNeedsConnection}
           openServices={openServices}
           retryGeneration={retryGeneration}
           resetToday={resetToday}

@@ -1,12 +1,13 @@
 import type { ApiKeys } from "@/lib/types";
-import { ServiceConfigError } from "@/lib/server/deepseek";
-
+import { ServiceConfigError } from "@/lib/server/errors";
 
 export const minimaxApiHost = (
   process.env.MINIMAX_API_HOST ?? "https://api.minimaxi.com"
 ).replace(/\/+$/, "");
+export const minimaxTextEndpoint = `${minimaxApiHost}/v1/text/chatcompletion_v2`;
 const minimaxMusicEndpoint = `${minimaxApiHost}/v1/music_generation`;
-export const minimaxMusicModelId = process.env.MINIMAX_MUSIC_MODEL ?? "music-2.0";
+export const minimaxTextModelId = process.env.MINIMAX_TEXT_MODEL ?? "MiniMax-M3";
+export const minimaxMusicModelId = process.env.MINIMAX_MUSIC_MODEL ?? "music-3.0-free";
 
 type MiniMaxMusicResponse = {
   data?: {
@@ -20,7 +21,7 @@ type MiniMaxMusicResponse = {
   trace_id?: string;
 };
 
-function getMiniMaxApiKey(apiKeys?: ApiKeys) {
+export function getMiniMaxApiKey(apiKeys?: ApiKeys) {
   const key = process.env.MINIMAX_API_KEY || apiKeys?.minimaxApiKey;
   if (!key?.trim()) {
     throw new ServiceConfigError("缺少 MiniMax API Key。请配置 MINIMAX_API_KEY，或在“我的”页填写。");

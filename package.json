@@ -10,8 +10,6 @@
     "test": "node --test src/lib/conversation.test.ts src/lib/memories.test.ts src/lib/moment-context.test.ts src/lib/storage.test.ts"
   },
   "dependencies": {
-    "@ai-sdk/deepseek": "^3.0.1",
-    "ai": "^7.0.4",
     "idb": "^8.0.3",
     "lucide-react": "^1.21.0",
     "next": "16.2.9",
