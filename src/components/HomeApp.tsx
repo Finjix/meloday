@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, formatDate, formatTime } from "@/lib/client";
-import type { GenerationJob, SessionSnapshot } from "@/lib/types";
+import { draftText, type GenerationJob, type SessionSnapshot } from "@/lib/types";
 import { useAuth } from "./AuthContext";
 import { AnimatedAgentMessage } from "./AnimatedAgentMessage";
 import { GenerationCard } from "./GenerationCard";
@@ -28,7 +28,7 @@ export function HomeApp() {
   const [sending, setSending] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
-  const transcriptRef = useRef<HTMLDivElement>(null);
+  const generationInFlight = Boolean(job && (job.status === "queued" || job.status === "running"));
 
   const loadSession = useCallback(async () => {
     try {
@@ -51,10 +51,6 @@ export function HomeApp() {
 
   useEffect(() => { void loadSession(); }, [loadSession]);
 
-  useEffect(() => {
-    transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: "smooth" });
-  }, [session?.messages.length]);
-
   const startSession = async () => {
     setCreating(true); setNotice(""); setJob(null);
     try {
@@ -69,7 +65,7 @@ export function HomeApp() {
 
   const sendMessage = async () => {
     const content = input.trim();
-    if (!content || !session || session.status !== "active" || sending) return;
+    if (!content || !session || session.status !== "active" || sending || generationInFlight) return;
     setSending(true); setNotice(""); setInput("");
     try {
       const result = await apiFetch<{ snapshot: SessionSnapshot; shouldGenerate: boolean; generationReason: string | null }>(`/api/sessions/${session.id}/messages`, { method: "POST", body: JSON.stringify({ content }) });
@@ -141,11 +137,12 @@ export function HomeApp() {
   if (loading) return <div className="page-scroll loading-panel"><span className="loading-orbit" />正在打开今天…</div>;
   if (!user) return null;
 
-  const canGenerate = Boolean(session && session.status === "active" && session.draft.stableText.concat(session.draft.recentText).trim());
-  const generating = job && (job.status === "queued" || job.status === "running");
-  const latestAgentMessageId = session ? [...session.messages].reverse().find((message) => message.role === "agent")?.id : undefined;
+  const canGenerate = Boolean(session && session.status === "active" && draftText(session.draft));
+  const latestAgentMessage = session ? [...session.messages].reverse().find((message) => message.role === "agent") : undefined;
+  const generating = generationInFlight;
+  const noticeView = notice && <div className="notice" role="status">{notice}</div>;
 
-  return <div className="page-scroll home-page">
+  return <div className={`page-scroll home-page${session && job?.status !== "succeeded" ? " home-page--session" : ""}`}>
     <div className="home-heading">
       <div><span className="eyebrow">{formatDate(new Date().toISOString())}</span><h1>{currentGreeting()}{user.displayName}</h1><p>把今天的片段，慢慢变成一段音乐。</p></div>
     </div>
@@ -157,34 +154,38 @@ export function HomeApp() {
     </section>}
 
     {session && <>
-      {job?.status === "succeeded" ? <GenerationCard job={job} onSave={saveJob} onRegenerate={regenerate} saving={saving} /> : <>
-        <section className="agent-panel">
-          <div className="agent-avatar"><span>♫</span><i /></div>
-          <div className="agent-copy"><span className="eyebrow">{user.agentName} · 陪你写</span><h2>我在这里，听你说。</h2><p>不急着把它说得漂亮，真实就很好。</p></div>
+      {job?.status === "succeeded" ? <>
+        <GenerationCard job={job} onSave={saveJob} onRegenerate={regenerate} saving={saving} />
+        {noticeView}
+      </> : <div className="home-writing">
+        <section className="agent-panel" aria-label={`${user.agentName} 的当前回复`}>
+          <div className="agent-avatar" aria-hidden="true"><span>♫</span><i /></div>
+          <div className="agent-bubble">
+            <div className="agent-bubble-header"><span className="eyebrow">{user.agentName} · 陪你写</span><span className="live-dot">● {sending ? "正在倾听" : "在线"}</span></div>
+            <div className="agent-bubble-content" aria-live="polite" aria-atomic="true">
+              {sending ? <div className="agent-thinking" role="status"><span className="typing-dots" aria-hidden="true"><i /><i /><i /></span><span>正在倾听…</span></div> : latestAgentMessage ? <AnimatedAgentMessage content={latestAgentMessage.content} /> : <div className="agent-message"><p>我在听。</p><p>今天发生了什么，想从哪一刻说起？</p></div>}
+            </div>
+          </div>
           <button className="small-link" onClick={() => { void endCurrentSession(); }}>结束这页</button>
         </section>
-        <div className="chat-diary-grid">
-          <section className="conversation-card">
-            <div className="section-label"><span>和 {user.agentName} 说说</span><span className="live-dot">● 正在倾听</span></div>
-            <div className="transcript" ref={transcriptRef}>
-              {session.messages.length === 0 && <div className="message-agent"><p>我在听。</p><p>今天发生了什么，想从哪一刻说起？</p></div>}
-              {session.messages.map((message) => message.role === "agent" ? <AnimatedAgentMessage key={message.id} content={message.content} cancelAnimation={sending && message.id !== latestAgentMessageId} /> : <div className="message-user" key={message.id}>{message.content}</div>)}
-              {sending && <div className="typing-dots"><i /><i /><i /></div>}
-            </div>
-            <div className="composer"><textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} placeholder="写下此刻想说的话…" rows={2} disabled={sending || session.status !== "active"} /><button className="send-button" onClick={() => void sendMessage()} disabled={!input.trim() || sending} aria-label="发送">↗</button></div>
-          </section>
-          <section className="paper-card">
-            <div className="paper-meta"><span>{formatDate(session.createdAt)}</span></div>
-            <div className="paper-time">{formatTime(new Date().toISOString())}</div>
-            <div className="paper-lines"><p className={!session.draft.stableText && !session.draft.recentText ? "paper-placeholder" : ""}>{session.draft.stableText || session.draft.recentText || "你的日记会从这里慢慢长出来…"}</p></div>
-            {canGenerate && <button className="generate-cta" onClick={() => void startGeneration(session.id)} disabled={Boolean(generating)}>{generating ? "正在把故事变成音乐…" : "开始生成音乐日记  ✦"}</button>}
-          </section>
+        <section className="paper-card">
+          <div className="paper-meta"><span>{formatDate(session.createdAt)}</span></div>
+          <div className="paper-time">{formatTime(new Date().toISOString())}</div>
+          <div className="paper-lines"><p className={!draftText(session.draft) ? "paper-placeholder" : ""}>{draftText(session.draft) || "你的日记会从这里慢慢长出来…"}</p></div>
+          {canGenerate && <button className="generate-cta" onClick={() => void startGeneration(session.id)} disabled={generating}>{generating ? "正在把故事变成音乐…" : "开始生成音乐日记  ✦"}</button>}
+        </section>
+        <div className="home-session-footer">
+          {job?.status === "failed" && <section className="generation-failed"><div><strong>这次生成没有完成</strong><p>{job.errorMessage || "服务暂时没有接住这段故事。"}</p></div><button className="button button-ghost" onClick={() => void startGeneration(session.id)}>再试一次</button></section>}
+          {job && generating && <section className="generation-progress"><span className="loading-orbit" /><div><strong>{job.status === "queued" ? "已经排上队了…" : job.stage === "finalizing" ? "正在整理你的日记…" : job.stage === "music" ? "正在为故事写一段音乐…" : "正在画一张封面…"}</strong><p>不用一直等着，可以先去看看日记本。</p></div><Link href="/diary" className="small-link">去日记本</Link></section>}
+          {noticeView}
+          <form className="composer" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
+            <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} placeholder="写下此刻想说的话…" rows={2} disabled={sending || generating || session.status !== "active"} />
+            <button type="submit" className="send-button" disabled={!input.trim() || sending || generating} aria-label="发送">↗</button>
+          </form>
         </div>
-      </>}
-      {job?.status === "failed" && <section className="generation-failed"><div><strong>这次生成没有完成</strong><p>{job.errorMessage || "服务暂时没有接住这段故事。"}</p></div><button className="button button-ghost" onClick={() => void startGeneration(session.id)}>再试一次</button></section>}
-      {generating && <section className="generation-progress"><span className="loading-orbit" /><div><strong>{job.status === "queued" ? "已经排上队了…" : job.stage === "finalizing" ? "正在整理你的日记…" : job.stage === "music" ? "正在为故事写一段音乐…" : "正在画一张封面…"}</strong><p>不用一直等着，可以先去看看日记本。</p></div><Link href="/diary" className="small-link">去日记本</Link></section>}
+      </div>}
     </>}
-    {notice && <div className="notice" role="status">{notice}</div>}
+    {!session && noticeView}
   </div>;
 
   async function endCurrentSession() {
