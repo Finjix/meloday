@@ -81,6 +81,7 @@ test("agent JSON, intent, state merge and provider decoders", async () => {
   assert.throws(() => providers.parseJsonObject("not json"), (error) => error instanceof providers.ProviderError);
 
   const reply = await providers.generateAgentTurn({
+    userName: "Alice",
     userMessage: "开始生成吧",
     state: types.DEFAULT_AGENT_STATE,
     draft: types.EMPTY_DIARY_DRAFT,
@@ -91,12 +92,22 @@ test("agent JSON, intent, state merge and provider decoders", async () => {
   assert.ok(reply.replyParts.length <= 3);
 
   const naturalRegenerationReply = await providers.generateAgentTurn({
+    userName: "Alice",
     userMessage: "换成更轻快的音乐",
     state: types.DEFAULT_AGENT_STATE,
     draft: types.EMPTY_DIARY_DRAFT,
     recentMessages: [],
   });
   assert.equal(naturalRegenerationReply.shouldGenerate, true);
+
+  const identityReply = await providers.generateAgentTurn({
+    userName: "Alice",
+    userMessage: "我是谁",
+    state: types.DEFAULT_AGENT_STATE,
+    draft: types.EMPTY_DIARY_DRAFT,
+    recentMessages: [],
+  });
+  assert.equal(identityReply.replyParts[0], "我记得，你叫 Alice。");
 
   const merged = types.mergeAgentState(types.DEFAULT_AGENT_STATE, {
     emotion: "平静",

@@ -127,12 +127,26 @@ export function HomeApp() {
   const sendMessage = async () => {
     const content = input.trim();
     if (!content || !session || session.status !== "active" || sending || generationInFlight) return;
-    setSending(true); setNotice(""); setInput("");
+    const previousSession = session;
+    const sentAt = new Date().toISOString();
+    const optimisticSession: SessionSnapshot = {
+      ...session,
+      lastActivityAt: sentAt,
+      draft: {
+        ...session.draft,
+        userTurnCount: session.draft.userTurnCount + 1,
+        turnsSinceOrganization: session.draft.turnsSinceOrganization + 1,
+        recentText: [session.draft.recentText, content].filter(Boolean).join("\n"),
+      },
+      messages: [...session.messages, { id: `pending-${sentAt}`, role: "user", content, createdAt: sentAt }],
+    };
+    setSending(true); setNotice(""); setSession(optimisticSession); setInput("");
     try {
       const result = await apiFetch<{ snapshot: SessionSnapshot; shouldGenerate: boolean; generationReason: string | null }>(`/api/sessions/${session.id}/messages`, { method: "POST", body: JSON.stringify({ content }) });
       setSession(result.snapshot);
       if (result.shouldGenerate) await startGeneration(result.snapshot.id);
     } catch (error) {
+      setSession(previousSession);
       setInput(content);
       setNotice(error instanceof Error ? error.message : "这次没有发送成功，请再试一次。");
     } finally {

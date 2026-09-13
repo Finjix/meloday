@@ -41,11 +41,11 @@ function recentUserMessages(snapshot: SessionSnapshot, count: number) {
   return snapshot.messages.filter((message) => message.role === "user").slice(-Math.max(count, 1));
 }
 
-export async function receiveMessage(id: string, userId: string, content: string): Promise<{ snapshot: SessionSnapshot; shouldGenerate: boolean; generationReason: string | null }> {
+export async function receiveMessage(id: string, userId: string, userName: string, content: string): Promise<{ snapshot: SessionSnapshot; shouldGenerate: boolean; generationReason: string | null }> {
   const before = assertActive(id, userId);
   addSessionMessage(id, "user", content);
   const withUser = getSessionSnapshot(id, userId)!;
-  const reply = await generateAgentTurn({ userMessage: content, state: before.state, draft: before.draft, recentMessages: withUser.messages.slice(-12) });
+  const reply = await generateAgentTurn({ userName, userMessage: content, state: before.state, draft: before.draft, recentMessages: withUser.messages.slice(-12) });
   const state = mergeAgentState(before.state, reply.statePatch);
   let draft: DiaryDraft = {
     ...before.draft,

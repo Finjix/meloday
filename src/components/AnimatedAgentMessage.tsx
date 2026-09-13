@@ -2,16 +2,30 @@
 
 import { useEffect, useState } from "react";
 
+const CHARACTER_INTERVAL_MS = 70;
+
 export function AnimatedAgentMessage({ content }: { content: string }) {
-  const parts = content.split(/\n+/).filter(Boolean);
-  const [count, setCount] = useState(0);
+  const characters = Array.from(content);
+  const [visibleCount, setVisibleCount] = useState(0);
+
   useEffect(() => {
-    setCount(1);
-    if (parts.length <= 1) return;
-    const timers = parts.slice(1).map((_, index) => window.setTimeout(() => setCount((current) => Math.max(current, index + 2)), 360 * (index + 1)));
-    return () => timers.forEach(window.clearTimeout);
-  // parts is derived from the immutable message content for this mounted message.
+    setVisibleCount(0);
+    if (!characters.length) return;
+    const timer = window.setInterval(() => {
+      setVisibleCount((current) => {
+        if (current >= characters.length) {
+          window.clearInterval(timer);
+          return current;
+        }
+        return current + 1;
+      });
+    }, CHARACTER_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  // characters is derived from the immutable message content for this mounted message.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content]);
-  return <div className="agent-message">{parts.slice(0, count).map((part, index) => <p key={`${part}-${index}`}>{part}</p>)}</div>;
+
+  const visibleContent = characters.slice(0, visibleCount).join("");
+  const parts = visibleContent.split(/\n+/).filter(Boolean);
+  return <div className="agent-message">{parts.map((part, index) => <p key={`${part}-${index}`}>{part}</p>)}</div>;
 }

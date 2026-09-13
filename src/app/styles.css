@@ -109,8 +109,8 @@ label input:focus { border-color: rgba(109,148,132,.5); box-shadow: 0 0 0 3px rg
 .paper-card { position: relative; display: flex; flex-direction: column; min-height: 0; padding: 22px 21px; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: repeating-linear-gradient(to bottom, rgba(255,253,248,.98) 0, rgba(255,253,248,.98) 31px, rgba(154,181,165,.18) 32px, rgba(255,253,248,.98) 33px); box-shadow: 0 10px 32px rgba(76,83,66,.06); }
 .home-page--session .paper-card { min-height: min(380px, 52vh); }
 .paper-card::before { content: ""; position: absolute; top: 0; bottom: 0; left: 42px; border-left: 1px solid rgba(233,185,148,.35); }
-.paper-meta, .paper-time, .paper-lines { position: relative; z-index: 1; margin-left: 35px; }
-.paper-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; color: var(--sage-deep); font-size: 11px; font-weight: 700; }
+.paper-meta, .paper-time, .paper-lines { position: relative; z-index: 1; margin-left: 35px; text-align: left; }
+.paper-meta { top: -10px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; color: var(--sage-deep); font-size: 11px; font-weight: 700; }
 .paper-time { margin-top: 11px; color: var(--muted); font-size: 11px; }
 .paper-lines { flex: 1 1 auto; min-height: 0; margin-top: 18px; overflow-y: auto; padding-right: 8px; }
 .paper-lines p { position: relative; top: -7px; margin: 0; color: var(--ink); font-family: Georgia, "Songti SC", serif; font-size: 18px; line-height: 33px; white-space: pre-wrap; }
