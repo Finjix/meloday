@@ -1,0 +1,20 @@
+[Unit]
+Description=Meloday music diary
+After=network.target
+
+[Service]
+Type=simple
+User=meloday
+Group=meloday
+WorkingDirectory=/srv/meloday/app
+EnvironmentFile=/etc/meloday/meloday.env
+ExecStart=/usr/bin/node /srv/meloday/app/.next/standalone/server.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/srv/meloday/data
+
+[Install]
+WantedBy=multi-user.target
