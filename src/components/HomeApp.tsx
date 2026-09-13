@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch, formatDate, formatTime } from "@/lib/client";
+import { apiFetch, cacheHomeInput, cacheHomeState, formatDate, formatTime, restoreHomeState } from "@/lib/client";
 import { draftText, type GenerationJob, type SessionSnapshot } from "@/lib/types";
 import { useAuth } from "./AuthContext";
 import { AnimatedAgentMessage } from "./AnimatedAgentMessage";
@@ -17,18 +17,46 @@ function currentGreeting(): string {
   return "晚上好，";
 }
 
+let cachedSession: SessionSnapshot | null = null;
+let cachedJob: GenerationJob | null = null;
+let cachedInput = "";
+
 export function HomeApp() {
   const { user, refresh } = useAuth();
   const router = useRouter();
-  const [session, setSession] = useState<SessionSnapshot | null>(null);
-  const [job, setJob] = useState<GenerationJob | null>(null);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [session, setSessionState] = useState<SessionSnapshot | null>(cachedSession);
+  const [job, setJobState] = useState<GenerationJob | null>(cachedJob);
+  const [input, setInputState] = useState(cachedInput);
   const [creating, setCreating] = useState(false);
   const [sending, setSending] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const generationInFlight = Boolean(job && (job.status === "queued" || job.status === "running"));
+
+  const setSession = (next: SessionSnapshot | null) => {
+    cachedSession = next;
+    cacheHomeState(next, cachedJob);
+    setSessionState(next);
+  };
+  const setJob = (next: GenerationJob | null) => {
+    cachedJob = next;
+    cacheHomeState(cachedSession, next);
+    setJobState(next);
+  };
+  const setInput = (next: string) => {
+    cachedInput = next;
+    cacheHomeInput(next);
+    setInputState(next);
+  };
+
+  const resizeTextarea = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
+  }, []);
 
   const loadSession = useCallback(async () => {
     try {
@@ -44,18 +72,51 @@ export function HomeApp() {
       }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "无法读取临时日记。");
-    } finally {
-      setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void loadSession(); }, [loadSession]);
+  useEffect(() => { resizeTextarea(); }, [input, resizeTextarea]);
+
+  useEffect(() => {
+    const restored = restoreHomeState();
+    if (!restored) {
+      if (!cachedSession) {
+        cachedInput = "";
+        cacheHomeState(null, null);
+      }
+      return;
+    }
+    if (cachedSession) return;
+    cachedSession = restored.session;
+    cachedJob = restored.job;
+    cachedInput = restored.input;
+    setSessionState(restored.session);
+    setJobState(restored.job);
+    setInputState(restored.input);
+  }, []);
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const updateKeyboardOffset = () => {
+      const nextOffset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+      setKeyboardOffset((current) => current === nextOffset ? current : nextOffset);
+    };
+    updateKeyboardOffset();
+    viewport.addEventListener("resize", updateKeyboardOffset);
+    viewport.addEventListener("scroll", updateKeyboardOffset);
+    return () => {
+      viewport.removeEventListener("resize", updateKeyboardOffset);
+      viewport.removeEventListener("scroll", updateKeyboardOffset);
+    };
+  }, []);
 
   const startSession = async () => {
     setCreating(true); setNotice(""); setJob(null);
     try {
       const next = await apiFetch<SessionSnapshot>("/api/sessions", { method: "POST", body: JSON.stringify({}) });
       setSession(next);
+      setInput("");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "暂时无法开始新的日记。");
     } finally {
@@ -112,9 +173,9 @@ export function HomeApp() {
     if (!job || job.status !== "succeeded") return;
     setSaving(true); setNotice("");
     try {
-      const entry = await apiFetch<{ id: string }>(`/api/generations/${job.id}/save`, { method: "POST" });
+      await apiFetch<{ id: string }>(`/api/generations/${job.id}/save`, { method: "POST" });
       await refresh();
-      router.push(`/diary/${entry.id}`);
+      router.push("/diary");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "保存失败，请稍后再试。");
     } finally {
@@ -122,30 +183,22 @@ export function HomeApp() {
     }
   };
 
-  const regenerate = async (feedback: string) => {
-    if (!job || job.status !== "succeeded") return;
+  const returnToWriting = () => {
     setNotice("");
-    try {
-      const next = await apiFetch<GenerationJob>(`/api/generations/${job.id}/regenerate`, { method: "POST", body: JSON.stringify({ feedback }) });
-      setJob(next);
-      void pollGeneration(next.id);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "暂时无法重新生成。");
-    }
+    setJob(null);
   };
 
-  if (loading) return <div className="page-scroll loading-panel"><span className="loading-orbit" />正在打开今天…</div>;
   if (!user) return null;
 
-  const canGenerate = Boolean(session && session.status === "active" && draftText(session.draft));
   const latestAgentMessage = session ? [...session.messages].reverse().find((message) => message.role === "agent") : undefined;
   const generating = generationInFlight;
   const noticeView = notice && <div className="notice" role="status">{notice}</div>;
+  const pageStyle = { "--keyboard-offset": `${keyboardOffset}px` } as CSSProperties;
 
-  return <div className={`page-scroll home-page${session && job?.status !== "succeeded" ? " home-page--session" : ""}`}>
-    <div className="home-heading">
+  return <div className={`page-scroll home-page${session && job?.status !== "succeeded" ? " home-page--session" : ""}`} style={pageStyle}>
+    {!session && <div className="home-heading">
       <div><span className="eyebrow">{formatDate(new Date().toISOString())}</span><h1>{currentGreeting()}{user.displayName}</h1><p>把今天的片段，慢慢变成一段音乐。</p></div>
-    </div>
+    </div>}
 
     {!session && <section className="welcome-panel">
       <div className="welcome-orbit"><span>♫</span></div>
@@ -155,32 +208,34 @@ export function HomeApp() {
 
     {session && <>
       {job?.status === "succeeded" ? <>
-        <GenerationCard job={job} onSave={saveJob} onRegenerate={regenerate} saving={saving} />
+        <GenerationCard job={job} onSave={saveJob} onBack={returnToWriting} saving={saving} />
         {noticeView}
       </> : <div className="home-writing">
         <section className="agent-panel" aria-label={`${user.agentName} 的当前回复`}>
           <div className="agent-avatar" aria-hidden="true"><span>♫</span><i /></div>
           <div className="agent-bubble">
-            <div className="agent-bubble-header"><span className="eyebrow">{user.agentName} · 陪你写</span><span className="live-dot">● {sending ? "正在倾听" : "在线"}</span></div>
             <div className="agent-bubble-content" aria-live="polite" aria-atomic="true">
-              {sending ? <div className="agent-thinking" role="status"><span className="typing-dots" aria-hidden="true"><i /><i /><i /></span><span>正在倾听…</span></div> : latestAgentMessage ? <AnimatedAgentMessage content={latestAgentMessage.content} /> : <div className="agent-message"><p>我在听。</p><p>今天发生了什么，想从哪一刻说起？</p></div>}
+              {sending ? <div className="agent-thinking" role="status"><span className="typing-dots" aria-hidden="true"><i /><i /><i /></span><span>正在倾听…</span></div> : latestAgentMessage ? <AnimatedAgentMessage content={latestAgentMessage.content} /> : <div className="agent-message"><p>你好呀，有什么想和我说的！</p></div>}
             </div>
           </div>
-          <button className="small-link" onClick={() => { void endCurrentSession(); }}>结束这页</button>
         </section>
         <section className="paper-card">
           <div className="paper-meta"><span>{formatDate(session.createdAt)}</span></div>
           <div className="paper-time">{formatTime(new Date().toISOString())}</div>
           <div className="paper-lines"><p className={!draftText(session.draft) ? "paper-placeholder" : ""}>{draftText(session.draft) || "你的日记会从这里慢慢长出来…"}</p></div>
-          {canGenerate && <button className="generate-cta" onClick={() => void startGeneration(session.id)} disabled={generating}>{generating ? "正在把故事变成音乐…" : "开始生成音乐日记  ✦"}</button>}
         </section>
         <div className="home-session-footer">
-          {job?.status === "failed" && <section className="generation-failed"><div><strong>这次生成没有完成</strong><p>{job.errorMessage || "服务暂时没有接住这段故事。"}</p></div><button className="button button-ghost" onClick={() => void startGeneration(session.id)}>再试一次</button></section>}
+          {job?.status === "failed" && <section className="generation-failed" role="alert"><div><strong>这次生成没有完成</strong><p>{job.errorMessage || "服务暂时没有接住这段故事。"}</p></div><button className="button button-ghost" onClick={() => void startGeneration(session.id)}>再试一次</button></section>}
           {job && generating && <section className="generation-progress"><span className="loading-orbit" /><div><strong>{job.status === "queued" ? "已经排上队了…" : job.stage === "finalizing" ? "正在整理你的日记…" : job.stage === "music" ? "正在为故事写一段音乐…" : "正在画一张封面…"}</strong><p>不用一直等着，可以先去看看日记本。</p></div><Link href="/diary" className="small-link">去日记本</Link></section>}
           {noticeView}
           <form className="composer" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
-            <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} placeholder="写下此刻想说的话…" rows={2} disabled={sending || generating || session.status !== "active"} />
-            <button type="submit" className="send-button" disabled={!input.trim() || sending || generating} aria-label="发送">↗</button>
+            <div className="composer-input">
+              <textarea ref={textareaRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} placeholder="写下此刻想说的话…" rows={1} disabled={sending || generating || session.status !== "active"} />
+              <div className="composer-actions">
+                <button type="button" className="new-diary-button" onClick={() => void startSession()} disabled={creating || sending || generating} aria-label="新开日记" title="新开日记">+</button>
+                <button type="submit" className="send-button" disabled={!input.trim() || sending || generating} aria-label="发送">↗</button>
+              </div>
+            </div>
           </form>
         </div>
       </div>}
@@ -188,8 +243,4 @@ export function HomeApp() {
     {!session && noticeView}
   </div>;
 
-  async function endCurrentSession() {
-    if (!session) return;
-    try { await apiFetch(`/api/sessions/${session.id}`, { method: "DELETE" }); setSession(null); setJob(null); } catch (error) { setNotice(error instanceof Error ? error.message : "无法结束这页。"); }
-  }
 }

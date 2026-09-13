@@ -90,6 +90,14 @@ test("agent JSON, intent, state merge and provider decoders", async () => {
   assert.equal(reply.generationReason, "用户主动要求生成");
   assert.ok(reply.replyParts.length <= 3);
 
+  const naturalRegenerationReply = await providers.generateAgentTurn({
+    userMessage: "换成更轻快的音乐",
+    state: types.DEFAULT_AGENT_STATE,
+    draft: types.EMPTY_DIARY_DRAFT,
+    recentMessages: [],
+  });
+  assert.equal(naturalRegenerationReply.shouldGenerate, true);
+
   const merged = types.mergeAgentState(types.DEFAULT_AGENT_STATE, {
     emotion: "平静",
     completeness: 4,

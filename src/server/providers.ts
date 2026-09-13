@@ -65,7 +65,7 @@ const TOKEN_HUB_AGENT_SYSTEM_PROMPT = `你是 Meloday 的音乐日记陪伴 Agen
   "generationReason": null
 }
 
-replyParts 是给用户看的自然中文短句，最多三段；不要连续盘问，最多提出一个轻问题。用户明确说开始生成、就这些或帮我生成音乐时，shouldGenerate 必须为 true。信息足够时也可以自然建议生成。`; 
+replyParts 是给用户看的自然中文短句，最多三段；不要连续盘问，最多提出一个轻问题。用户明确说开始生成、就这些或帮我生成音乐时，shouldGenerate 必须为 true；如果用户明确要求重新生成或用自然语言改变音乐，例如“换成更轻快的音乐”“把音乐改成钢琴版”“再做一版”，也必须为 true。仅仅补充日记内容时不要触发生成。信息足够时也可以自然建议生成。`;
 
 export function parseJsonObject(text: string): unknown {
   const stripped = text.replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
@@ -83,14 +83,21 @@ function safeText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function tokenHubFailureMessage(payload: { error?: { message?: unknown }; base_resp?: { status_msg?: unknown }; message?: unknown } | null, service: string, status: number): string {
+  const detail = safeText(payload?.error?.message) || safeText(payload?.base_resp?.status_msg) || safeText(payload?.message);
+  if (detail) return detail;
+  if (status === 402) return `${service}服务未开通或额度不足，请在 TokenHub 控制台开通对应模型或检查余额。`;
+  return `${service}失败（${status}）。`;
+}
+
 function fakeAgentTurn(input: AgentTurnInput): AgentReply {
   const turn = input.draft.userTurnCount + 1;
   const hasEmotion = /开心|高兴|快乐|难过|委屈|焦虑|累|疲惫|放松|平静|生气|失落|感动/.test(input.userMessage);
-  const shouldGenerate = /^(开始生成(?:吧)?|就这些了?|帮我生成音乐|生成音乐|可以生成了?)[。！!，,]?$/i.test(input.userMessage.trim());
+  const shouldGenerate = /^(开始生成(?:吧)?|就这些了?|帮我生成音乐|生成音乐|可以生成了?)[。！!，,]?$/i.test(input.userMessage.trim()) || /(?:重新|再)生成|(?:换成|换个|改成|改为).*(?:音乐|旋律|曲子|风格|节奏|配器)|(?:音乐|旋律|曲子).*(?:换成|改成|改为)/i.test(input.userMessage.trim());
   const replyParts = shouldGenerate
     ? ["好，我已经把今天的故事接住了。", "现在为你整理成一张音乐日记卡片。"]
     : turn === 1
-      ? ["我在听。", "今天发生了什么，想从哪一刻说起？"]
+      ? ["你好呀，有什么想和我说的！"]
       : hasEmotion
         ? ["我能感受到这件事在你心里留下了重量。", "如果愿意，可以再告诉我一个当时最清晰的细节。"]
         : ["嗯，我记下来了。", "还有什么片段是你希望今天被留下的吗？"];
@@ -147,6 +154,22 @@ async function runPiPrompt(prompt: string): Promise<string> {
   assertProviderConfiguration();
   const credentials = new InMemoryCredentialStore();
   const modelRuntime = await ModelRuntime.create({ credentials });
+  modelRuntime.registerProvider("tokenhub", {
+    name: "TokenHub",
+    baseUrl: config.tokenHubBaseUrl,
+    api: "openai-completions",
+    authHeader: true,
+    models: [{
+      id: config.textModel,
+      name: "DeepSeek Flash",
+      reasoning: false,
+      input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 1_000_000,
+      maxTokens: 4096,
+      compat: { supportsDeveloperRole: false, maxTokensField: "max_tokens" },
+    }],
+  });
   await modelRuntime.setRuntimeApiKey("tokenhub", config.tokenHubApiKey);
   const settingsManager = SettingsManager.inMemory({
     compaction: { enabled: true, reserveTokens: 12000, keepRecentTokens: 20000 },
@@ -187,8 +210,8 @@ async function tokenHubChat(system: string, user: string, maxTokens = 1600): Pro
       body: JSON.stringify({ model: config.textModel, messages: [{ role: "system", content: system }, { role: "user", content: user }], temperature: 0.4, max_tokens: maxTokens, stream: false }),
       signal: controller.signal,
     });
-    const payload = await response.json().catch(() => null) as { choices?: Array<{ message?: { content?: unknown } }>; error?: { message?: string } } | null;
-    if (!response.ok) throw new ProviderError("tokenhub", response.status, payload?.error?.message ?? `TokenHub 请求失败（${response.status}）。`);
+    const payload = await response.json().catch(() => null) as { choices?: Array<{ message?: { content?: unknown } }>; error?: { message?: unknown }; base_resp?: { status_msg?: unknown }; message?: unknown } | null;
+    if (!response.ok) throw new ProviderError("tokenhub", response.status, tokenHubFailureMessage(payload, "文本服务", response.status));
     const content = safeText(payload?.choices?.[0]?.message?.content);
     if (!content) throw new ProviderError("tokenhub", 502, "TokenHub 没有返回文本内容。");
     return content;
@@ -274,12 +297,19 @@ export async function generateMusic(direction: MusicDirection): Promise<Generate
     const response = await fetch(`${config.tokenHubBaseUrl}/wand/minimax-music/generation`, {
       method: "POST",
       headers: { Authorization: `Bearer ${config.tokenHubApiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: config.musicModel, prompt: `${direction.style}, ${direction.mood}, ${direction.tempo}, ${direction.instruments.join(", ")}`, is_instrumental: true, output_format: "hex", audio_setting: { sample_rate: 44100, bitrate: 256000, format: "mp3" } }),
+      body: JSON.stringify({ model: config.musicModel, prompt: `${direction.style}, ${direction.mood}, ${direction.tempo}, ${direction.instruments.join(", ")}`, is_instrumental: true, output_format: "url", audio_setting: { sample_rate: 44100, bitrate: 256000, format: "mp3" } }),
       signal: controller.signal,
     });
-    const payload = await response.json().catch(() => null) as { data?: { audio?: unknown; status?: number }; base_resp?: { status_msg?: string } } | null;
-    if (!response.ok) throw new ProviderError("minimax-music", response.status, payload?.base_resp?.status_msg ?? `音乐生成失败（${response.status}）。`);
-    return { buffer: decodeHexAudio(safeText(payload?.data?.audio)), mimeType: "audio/mpeg", extension: "mp3" };
+    const payload = await response.json().catch(() => null) as { data?: { audio?: unknown; status?: number }; error?: { message?: unknown }; base_resp?: { status_msg?: unknown }; message?: unknown } | null;
+    if (!response.ok) throw new ProviderError("minimax-music", response.status, tokenHubFailureMessage(payload, "音乐服务", response.status));
+    const audio = safeText(payload?.data?.audio);
+    if (/^https?:\/\//i.test(audio)) {
+      const audioResponse = await fetch(audio, { signal: controller.signal });
+      if (!audioResponse.ok) throw new ProviderError("minimax-music", 502, "音乐文件下载失败。");
+      const mimeType = audioResponse.headers.get("content-type")?.split(";")[0] ?? "audio/mpeg";
+      return { buffer: Buffer.from(await audioResponse.arrayBuffer()), mimeType, extension: mimeType.includes("wav") ? "wav" : "mp3" };
+    }
+    return { buffer: decodeHexAudio(audio), mimeType: "audio/mpeg", extension: "mp3" };
   } catch (error) {
     if (error instanceof ProviderError) throw error;
     if (error instanceof DOMException && error.name === "AbortError") throw new ProviderError("minimax-music", 504, "音乐生成超时。");
@@ -298,8 +328,8 @@ export async function generateCover(card: { title: string; summary: string; body
     body: JSON.stringify({ model: config.imageModel, prompt: `温暖、清新、治愈的音乐日记封面。${card.title}。${card.summary}。画面为柔和纸张质感、轻微手绘插画感、留白充足的方形构图，不出现可读文字，不出现人物肖像。音乐氛围：${card.direction.mood}、${card.direction.style}。`, size: "2048x2048", output_format: "jpeg", response_format: "b64_json", sequential_image_generation: "disabled", watermark: true }),
     signal: AbortSignal.timeout(config.generationTimeoutMs),
   });
-  const payload = await response.json().catch(() => null) as { data?: Array<{ b64_json?: string; url?: string }>; base_resp?: { status_msg?: string } } | null;
-  if (!response.ok) throw new ProviderError("seedream", response.status, payload?.base_resp?.status_msg ?? `封面生成失败（${response.status}）。`);
+  const payload = await response.json().catch(() => null) as { data?: Array<{ b64_json?: string; url?: string }>; error?: { message?: unknown }; base_resp?: { status_msg?: unknown }; message?: unknown } | null;
+  if (!response.ok) throw new ProviderError("seedream", response.status, tokenHubFailureMessage(payload, "封面服务", response.status));
   const item = payload?.data?.[0];
   if (item?.b64_json) return { buffer: decodeBase64Image(item.b64_json), mimeType: "image/jpeg", extension: "jpg" };
   if (item?.url) {
