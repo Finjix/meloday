@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { apiFetch, cacheHomeInput, cacheHomeState, formatDate, formatTime, restoreHomeState } from "@/lib/client";
 import { draftText, type GenerationJob, type SessionSnapshot } from "@/lib/types";
 import { useAuth } from "./AuthContext";
@@ -46,7 +46,10 @@ export function HomeApp() {
   const [sessionTransitioning, setSessionTransitioning] = useState(false);
   const [sending, setSending] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generationCardOpen, setGenerationCardOpen] = useState(false);
   const [notice, setNotice] = useState("");
+  const [agentReplyError, setAgentReplyError] = useState("");
+  const [retryAgentContent, setRetryAgentContent] = useState<string | null>(null);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const generationInFlight = Boolean(job && (job.status === "queued" || job.status === "running"));
@@ -129,7 +132,7 @@ export function HomeApp() {
 
   const startSession = async () => {
     const replaceCurrentSession = Boolean(session);
-    setCreating(true); setNotice(""); setJob(null);
+    setCreating(true); setNotice(""); setAgentReplyError(""); setRetryAgentContent(null); setGenerationCardOpen(false); setJob(null);
     if (replaceCurrentSession) setSessionTransitioning(true);
     try {
       const request = apiFetch<SessionSnapshot>("/api/sessions", { method: "POST", body: JSON.stringify({}) });
@@ -146,7 +149,7 @@ export function HomeApp() {
   };
 
   const startQuickMusic = async (preset: "relax" | "move") => {
-    setCreating(true); setNotice(""); setJob(null);
+    setCreating(true); setNotice(""); setAgentReplyError(""); setRetryAgentContent(null); setGenerationCardOpen(false); setJob(null);
     try {
       const result = await apiFetch<{ session: SessionSnapshot; job: GenerationJob }>("/api/quick-music", { method: "POST", body: JSON.stringify({ preset }) });
       setSession(result.session);
@@ -160,8 +163,8 @@ export function HomeApp() {
     }
   };
 
-  const sendMessage = async () => {
-    const content = input.trim();
+  const sendMessage = async (contentToRetry?: string) => {
+    const content = (contentToRetry ?? input).trim();
     if (!content || !session || session.status !== "active" || sending || generationInFlight) return;
     const previousSession = session;
     const sentAt = new Date().toISOString();
@@ -171,12 +174,12 @@ export function HomeApp() {
       draft: {
         ...session.draft,
         userTurnCount: session.draft.userTurnCount + 1,
-        turnsSinceOrganization: session.draft.turnsSinceOrganization + 1,
+        turnsSinceOrganization: 0,
         recentText: [session.draft.recentText, content].filter(Boolean).join("\n"),
       },
       messages: [...session.messages, { id: `pending-${sentAt}`, role: "user", content, createdAt: sentAt }],
     };
-    setSending(true); setNotice(""); setSession(optimisticSession); setInput("");
+    setSending(true); setNotice(""); setAgentReplyError(""); setRetryAgentContent(null); setSession(optimisticSession); setInput("");
     try {
       const result = await apiFetch<{ snapshot: SessionSnapshot; shouldGenerate: boolean; generationReason: string | null }>(`/api/sessions/${session.id}/messages`, { method: "POST", body: JSON.stringify({ content }) });
       setSession(result.snapshot);
@@ -184,14 +187,15 @@ export function HomeApp() {
     } catch (error) {
       setSession(previousSession);
       setInput(content);
-      setNotice(error instanceof Error ? error.message : "这次没有发送成功，请再试一次。");
+      setRetryAgentContent(content);
+      setAgentReplyError(error instanceof Error ? error.message : "这次没有发送成功，请再试一次。");
     } finally {
       setSending(false);
     }
   };
 
   const startGeneration = async (sessionId: string) => {
-    setNotice("");
+    setNotice(""); setGenerationCardOpen(false);
     try {
       const nextJob = await apiFetch<GenerationJob>(`/api/sessions/${sessionId}/generate`, { method: "POST", body: JSON.stringify({}) });
       setJob(nextJob);
@@ -235,7 +239,7 @@ export function HomeApp() {
 
   const returnToWriting = () => {
     setNotice("");
-    setJob(null);
+    setGenerationCardOpen(false);
   };
 
   if (!user) return null;
@@ -243,12 +247,15 @@ export function HomeApp() {
   const latestAgentMessage = session ? [...session.messages].reverse().find((message) => message.role === "agent") : undefined;
   const agentAvatar = session ? agentAvatarForSession(session.id) : agentAvatars[0];
   const generating = generationInFlight;
+  const generationReady = job?.status === "succeeded";
   const noticeView = notice && <div className="notice home-notice" role="status">{notice}</div>;
   const pageStyle = { "--keyboard-offset": `${keyboardOffset}px` } as CSSProperties;
+  const topbarStatusTarget = typeof document === "undefined" ? null : document.getElementById("topbar-status");
 
   return <div className={`page-scroll home-page${session ? " home-page--session" : ""}`} style={pageStyle}>
+    {(generating || generationReady) && topbarStatusTarget && createPortal(generating ? <span className="generation-topbar" role="status"><span className="loading-orbit" />正在生成音乐日记…</span> : <button type="button" className="generation-topbar generation-topbar--ready" onClick={() => setGenerationCardOpen(true)}>音乐日记已生成，点击查看。</button>, topbarStatusTarget)}
     {!session && <div className="home-heading">
-      <div><span className="eyebrow">{formatDate(new Date().toISOString())}</span><h1>{currentGreeting()}{user.displayName}</h1><p>把今天的片段，慢慢变成一段音乐。</p></div>
+      <div><span className="eyebrow">{formatDate(new Date().toISOString())}</span><h1>{currentGreeting()}{user.agentName}</h1><p>把今天的片段，慢慢变成一段音乐。</p></div>
     </div>}
 
     {!session && <section className="welcome-panel">
@@ -266,13 +273,13 @@ export function HomeApp() {
     </section>}
 
     {session && <>
-      {job?.status === "succeeded" && <GenerationCard job={job} onSave={saveJob} onBack={returnToWriting} saving={saving} />}
+      {generationReady && generationCardOpen && <GenerationCard job={job} onSave={saveJob} onBack={returnToWriting} saving={saving} />}
       <div key={session.id} className={`home-writing ${sessionTransitioning ? "home-writing--exit" : "home-writing--enter"}`}>
         <section className="agent-panel" aria-label={`${user.agentName} 的当前回复`}>
           <div className="agent-avatar" aria-hidden="true"><span>{agentAvatar}</span></div>
           <div className="agent-bubble">
             <div className="agent-bubble-content" aria-live="polite" aria-atomic="true">
-              {sending ? <div className="agent-thinking" role="status"><span className="typing-dots" aria-hidden="true"><i /><i /><i /></span><span>正在倾听…</span></div> : latestAgentMessage ? <AnimatedAgentMessage content={latestAgentMessage.content} /> : <div className="agent-message"><p>你好呀，有什么想和我说的！</p></div>}
+              {sending ? <div className="agent-thinking" role="status"><span className="typing-dots" aria-hidden="true"><i /><i /><i /></span><span>正在倾听…</span></div> : agentReplyError ? <div className="agent-reply-error" role="alert"><span>{agentReplyError}</span>{retryAgentContent && <button type="button" onClick={() => void sendMessage(retryAgentContent)}>重试</button>}</div> : latestAgentMessage ? <AnimatedAgentMessage key={latestAgentMessage.id} messageId={latestAgentMessage.id} content={latestAgentMessage.content} /> : <div className="agent-message"><p>你好呀，有什么想和我说的！</p></div>}
             </div>
           </div>
         </section>
@@ -283,7 +290,6 @@ export function HomeApp() {
         </section>
         <div className="home-session-footer">
           {job?.status === "failed" && <section className="generation-failed" role="alert"><div><strong>这次生成没有完成</strong><p>{job.errorMessage || "服务暂时没有接住这段故事。"}</p></div><button className="button button-ghost" onClick={() => void startGeneration(session.id)}>再试一次</button></section>}
-          {job && generating && <section className="generation-progress"><span className="loading-orbit" /><div><strong>{job.status === "queued" ? "已经排上队了…" : job.stage === "finalizing" ? "正在整理你的日记…" : job.stage === "music" ? "正在为故事写一段音乐…" : "正在画一张封面…"}</strong><p>不用一直等着，可以先去看看日记本。</p></div><Link href="/diary" className="small-link">去日记本</Link></section>}
           {noticeView}
           <form className="composer" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
             <div className="composer-input">

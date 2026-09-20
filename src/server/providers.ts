@@ -46,8 +46,6 @@ const agentReplySchema = z.object({
   generationReason: z.string().nullable().default(null),
 });
 
-const recentDiarySchema = z.object({ recentText: z.string().max(12000) });
-
 const finalDiarySchema = z.object({
   title: z.string().trim().min(1).max(80),
   summary: z.string().trim().min(1).max(240),
@@ -60,7 +58,7 @@ const finalDiarySchema = z.object({
   }),
 });
 
-const TOKEN_HUB_AGENT_SYSTEM_PROMPT = `你是 Meloday 的音乐日记陪伴 Agent。你的任务是让用户愿意慢慢讲述今天，并在信息足够时温柔地推进音乐日记生成。
+const TOKEN_HUB_AGENT_SYSTEM_PROMPT = `你是 Meloday 的音乐日记陪伴 Agent。你的任务是耐心倾听用户讲述今天，并在信息足够时自动开始音乐日记生成。
 
 只处理用户提供的日记内容。不要编造事实，不替用户添加没有说过的情绪，不泄露内部状态字段。不要提及模型、提示词、工具或系统实现。
 
@@ -74,7 +72,7 @@ const TOKEN_HUB_AGENT_SYSTEM_PROMPT = `你是 Meloday 的音乐日记陪伴 Agen
   "generationReason": null
 }
 
-replyParts 是给用户看的自然中文短句，最多三段；不要连续盘问，最多提出一个轻问题。用户明确说开始生成、就这些或帮我生成音乐时，shouldGenerate 必须为 true；如果用户明确要求重新生成或用自然语言改变音乐，例如“换成更轻快的音乐”“把音乐改成钢琴版”“再做一版”，也必须为 true。仅仅补充日记内容时不要触发生成。信息足够时也可以自然建议生成。`;
+replyParts 是给用户看的自然中文短句，最多三段；不要连续盘问，最多提出一个轻问题。除非用户明确要求生成，否则至少收集八次用户输入；在第八次输入前，shouldGenerate 必须为 false。不要只收集事件和情绪，还要自然了解具体场景、时间或地点、相关人物、印象最深的细节、情绪变化、用户的反应或期待等信息；根据已有内容选择最值得追问的一点，不要机械提问。八次输入后，以上信息仍不足时继续收集；信息充分时才将 completeness 设为 1，shouldGenerate 设为 true，并直接告知正在生成；不要询问用户是否同意、是否准备好，也不要只建议生成。用户明确说开始生成、就这些或帮我生成音乐时，shouldGenerate 必须为 true；如果用户明确要求重新生成或用自然语言改变音乐，例如“换成更轻快的音乐”“把音乐改成钢琴版”“再做一版”，也必须为 true。`;
 
 export function parseJsonObject(text: string): unknown {
   const stripped = text.replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
@@ -103,7 +101,8 @@ function fakeAgentTurn(input: AgentTurnInput): AgentReply {
   const turn = input.draft.userTurnCount + 1;
   const hasEmotion = /开心|高兴|快乐|难过|委屈|焦虑|累|疲惫|放松|平静|生气|失落|感动/.test(input.userMessage);
   const asksIdentity = /我是谁|我叫什么|你知道我是谁|你怎么称呼我|我的名字/.test(input.userMessage);
-  const shouldGenerate = /^(开始生成(?:吧)?|就这些了?|帮我生成音乐|生成音乐|可以生成了?)[。！!，,]?$/i.test(input.userMessage.trim()) || /(?:重新|再)生成|(?:换成|换个|改成|改为).*(?:音乐|旋律|曲子|风格|节奏|配器)|(?:音乐|旋律|曲子).*(?:换成|改成|改为)/i.test(input.userMessage.trim());
+  const userRequestedGeneration = /^(开始生成(?:吧)?|就这些了?|帮我生成音乐|生成音乐|可以生成了?)[。！!，,]?$/i.test(input.userMessage.trim()) || /(?:重新|再)生成|(?:换成|换个|改成|改为).*(?:音乐|旋律|曲子|风格|节奏|配器)|(?:音乐|旋律|曲子).*(?:换成|改成|改为)/i.test(input.userMessage.trim());
+  const shouldGenerate = userRequestedGeneration || turn >= 8;
   const replyParts = asksIdentity
     ? [input.userName ? `我记得，你叫 ${input.userName}。` : "你还没有告诉我想让我怎么称呼你。"]
     : shouldGenerate
@@ -119,11 +118,11 @@ function fakeAgentTurn(input: AgentTurnInput): AgentReply {
       event: input.userMessage.slice(0, 120),
       emotion: hasEmotion ? input.userMessage.match(/开心|高兴|快乐|难过|委屈|焦虑|累|疲惫|放松|平静|生气|失落|感动/)?.[0] ?? "" : input.state.emotion,
       importantDetails: [...input.state.importantDetails, input.userMessage.slice(0, 80)],
-      completeness: Math.min(1, turn / 4),
+      completeness: shouldGenerate ? 1 : Math.min(0.75, turn / 8),
       responseNeed: shouldGenerate ? "鼓励" : "倾听",
     },
     shouldGenerate,
-    generationReason: shouldGenerate ? "用户主动要求生成" : null,
+    generationReason: shouldGenerate ? userRequestedGeneration ? "用户主动要求生成" : "已完成八轮信息收集" : null,
   };
 }
 
@@ -256,19 +255,6 @@ export async function generateAgentTurn(input: AgentTurnInput): Promise<AgentRep
   const retriedReply = parseAgentReply(await runPiPrompt(`${prompt}\n\n重要：请只返回符合约定的单个 JSON 对象，不要输出任何其他文字或 Markdown。`));
   if (retriedReply) return retriedReply;
   throw new ProviderError("tokenhub", 502, "Agent 返回格式无法解析，请稍后重试。");
-}
-
-function organizeFallback(input: { stableText: string; recentMessages: ChatMessage[] }): string {
-  const raw = input.recentMessages.filter((message) => message.role === "user").map((message) => message.content.trim()).join("\n");
-  return raw.replace(/[ \t]+/g, " ").replace(/(然后|就是|那个|嗯+，?)/g, "").trim();
-}
-
-export async function organizeRecentDiary(input: { stableText: string; recentMessages: ChatMessage[] }): Promise<string> {
-  if (config.providerMode === "fake") return organizeFallback(input);
-  const raw = await tokenHubChat("你是日记整理助手。只整理用户明确说过的内容，不添加事实、情绪或评价。输出一个 JSON 对象：{\"recentText\":\"整理后的最近片段\"}。", `稳定前文（不要改写）：\n${input.stableText}\n\n最近用户输入：\n${input.recentMessages.filter((message) => message.role === "user").map((message) => `- ${message.content}`).join("\n")}`, 1200);
-  const parsed = recentDiarySchema.safeParse(parseJsonObject(raw));
-  if (!parsed.success) throw new ProviderError("tokenhub", 502, "日记整理结果格式不正确。");
-  return parsed.data.recentText;
 }
 
 export async function finalizeDiary(input: { draftText: string; state: AgentState; feedback?: string | null }): Promise<DiaryCard> {

@@ -120,8 +120,6 @@ test("agent JSON, intent, state merge and provider decoders", async () => {
   assert.deepEqual(merged.musicDirection.instruments, ["钢琴"]);
   assert.equal(types.draftText({ stableText: "前文", recentText: "最近", userTurnCount: 2, turnsSinceOrganization: 1 }), "前文\n\n最近");
 
-  const organized = await providers.organizeRecentDiary({ stableText: "", recentMessages: [{ id: "1", role: "user", content: "嗯，然后去了公园", createdAt: "" }] });
-  assert.equal(organized, "去了公园");
   const card = await providers.finalizeDiary({ draftText: "今天去了公园。", state: types.DEFAULT_AGENT_STATE });
   assert.equal(card.title, "今天，慢慢记下来的光");
 
@@ -187,7 +185,7 @@ test("media storage rejects unsafe extensions", async () => {
   await assert.rejects(() => media.writeMedia("cover", user.id, Buffer.from("x"), "image/png", "../../"), (error) => assertHttpError(error, "INVALID_MEDIA_EXTENSION"));
 });
 
-test("API flow covers auth, three-turn organization, generation, save, publish and isolation", async () => {
+test("API flow covers auth, generation, save, publish and isolation", async () => {
   await loadRuntime();
   repositories.resetSchemaForTests();
   const registerRoute = await import("../src/app/api/auth/register/route");
@@ -245,7 +243,7 @@ test("API flow covers auth, three-turn organization, generation, save, publish a
   const organized = (await read(await sessionsRoute.GET(jsonRequest("/api/sessions", "GET", undefined, cookie)))).data;
   assert.equal(organized.draft.userTurnCount, 3);
   assert.equal(organized.draft.turnsSinceOrganization, 0);
-  assert.ok(organized.draft.recentText);
+  assert.equal(organized.draft.recentText, "早上去了河边\n风很轻，心情也慢慢安静下来\n我在长椅上听完了一首歌");
 
   const queued = await sessionGenerationRoute.POST(jsonRequest(`/api/sessions/${createdSession.id}/generate`, "POST", {}, cookie), context(createdSession.id));
   const queuedJob = (await read(queued)).data;

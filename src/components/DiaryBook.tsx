@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { apiFetch, formatDate, mediaUrl } from "@/lib/client";
@@ -54,7 +55,7 @@ export function DiaryBook() {
   return <div className="page-scroll diary-book-page"><div className="page-intro"><div><span className="eyebrow">保存下来的日子</span><h1>日记本</h1><p>每一页，都是今天曾经认真生活过的证据。</p></div></div>{error && <div className="notice">{error}</div>}{entries.length === 0 ? <EmptyState title="这里还很安静" text="完成第一张音乐日记卡片，它就会出现在这里。" action={<Link href="/" className="button button-primary">写下今天  →</Link>} /> : <div className="diary-list">{entries.map((entry) => {
     const cover = mediaUrl(entry.coverAssetId);
     return <article className="diary-list-card" key={entry.id} role="link" tabIndex={0} onPointerDown={(event) => { if (event.isPrimary && !(event.target instanceof Element && event.target.closest(".diary-list-actions"))) startLongPress(entry); }} onPointerUp={cancelLongPress} onPointerCancel={cancelLongPress} onPointerLeave={cancelLongPress} onClick={(event) => { if (event.target instanceof Element && event.target.closest(".diary-list-actions")) return; if (suppressNextOpen.current) { suppressNextOpen.current = false; return; } setSelectedEntry(entry); }} onKeyDown={(event) => { if (event.target instanceof Element && event.target.closest(".diary-list-actions")) return; if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedEntry(entry); } }}>
-      {cover ? <div className="diary-list-cover"><img src={cover} alt="日记封面" /></div> : <div className="diary-list-cover"><span>♫</span></div>}
+      {cover ? <div className="diary-list-cover"><Image src={cover} alt="日记封面" fill sizes="(max-width: 700px) 92px, 132px" unoptimized /></div> : <div className="diary-list-cover"><span>♫</span></div>}
       <div className="diary-list-copy"><div className="diary-list-meta"><span className="eyebrow">{formatDate(entry.createdAt)}</span>{entry.publishedAt && <span className="eyebrow diary-published">分享中</span>}</div><h2>{entry.title}</h2><p>{entry.summary}</p></div>
     </article>;
   })}</div>}{selectedEntry && <DiaryDialog entry={selectedEntry} onClose={() => setSelectedEntry(null)} onTogglePublish={() => void togglePublish(selectedEntry)} busy={busyEntryId === selectedEntry.id} />}<ConfirmDialog open={Boolean(deleteEntry)} title="确定删除这一页吗？" description="" confirmLabel="删除这一页" busy={busyEntryId === deleteEntry?.id} onCancel={() => setDeleteEntry(null)} onConfirm={() => void remove()} /></div>;

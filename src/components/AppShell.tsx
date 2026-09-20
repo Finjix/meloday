@@ -24,7 +24,7 @@ export function AppShell({ children, title, requireAuth = true }: { children: Re
           <Link href="/" className="brand-mark" aria-label="Meloday 首页"><span className="brand-dot" />Meloday</Link>
           <div className="topbar-right">
             {title && <span className="topbar-title">{title}</span>}
-            {user && <span className="topbar-slogan">把每一天，变成一段旋律！</span>}
+            {user && <span id="topbar-status" className="topbar-status"><span className="topbar-slogan">把每一天，变成一段旋律！</span></span>}
           </div>
         </header>
         <section className="app-content">{children}</section>

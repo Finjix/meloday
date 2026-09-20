@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch, formatDate, mediaUrl } from "@/lib/client";
@@ -42,7 +43,7 @@ export function SharedDiaryDialog({ id, onClose }: { id: string; onClose: () => 
       <button type="button" className="shared-diary-close" onClick={onClose} aria-label="关闭详情">×</button>
       {!entry && !error && <div className="shared-diary-status"><span className="loading-orbit" />正在展开这张卡片…</div>}
       {error && <div className="shared-diary-status">{error}</div>}
-      {entry && <><div className="shared-diary-cover">{cover ? <img src={cover} alt="分享日记封面" /> : <span>♫</span>}</div><div className="shared-diary-copy"><div className="author-line"><span className="avatar-mini">{authorAvatar ? <img src={authorAvatar} alt="" /> : entry.authorName.slice(0, 1)}</span><span>{entry.authorName}</span><time>{formatDate(entry.publishedAt)}</time></div><h2 id={titleId}>{entry.title}</h2><p className="shared-diary-summary">{entry.summary}</p>{audio && <AudioPlayer src={audio} />}<div className="shared-diary-body">{entry.body.split(/\n+/).map((paragraph, index) => <p key={`${paragraph}-${index}`}>{paragraph}</p>)}</div></div></>}
+      {entry && <><div className="shared-diary-cover">{cover ? <Image src={cover} alt="分享日记封面" fill sizes="min(100vw, 400px)" unoptimized /> : <span>♫</span>}</div><div className="shared-diary-copy"><div className="author-line"><span className="avatar-mini">{authorAvatar ? <Image src={authorAvatar} alt="" fill sizes="28px" unoptimized /> : entry.authorName.slice(0, 1)}</span><span>{entry.authorName}</span><time>{formatDate(entry.publishedAt)}</time></div><h2 id={titleId}>{entry.title}</h2><p className="shared-diary-summary">{entry.summary}</p>{audio && <AudioPlayer src={audio} />}</div></>}
     </article>
   </div>, document.body);
 }

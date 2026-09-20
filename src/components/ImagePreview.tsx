@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
@@ -28,7 +29,7 @@ export function ImagePreview({ src, alt, className, children }: { src: string; a
         <span id={titleId}>图片预览</span>
         <button type="button" className="image-preview-close" onClick={() => setOpen(false)} aria-label="关闭图片预览">×</button>
       </div>
-      <img className="image-preview-image" src={src} alt={alt} />
+      <Image className="image-preview-image" src={src} alt={alt} width={1600} height={1600} sizes="100vw" unoptimized />
       <div className="image-preview-actions">
         <a className="button button-primary" href={`${src}?download=1`} download>下载图片</a>
         <button type="button" className="button button-ghost" onClick={() => setOpen(false)}>关闭</button>

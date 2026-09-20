@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { apiFetch, formatDate, mediaUrl } from "@/lib/client";
 import type { SharedDiaryEntry } from "@/lib/types";
@@ -19,5 +20,5 @@ export function SharedDiaryDetail({ id }: { id: string }) {
 
   const cover = mediaUrl(entry.coverAssetId);
   const audio = mediaUrl(entry.audioAssetId);
-  return <div className="page-scroll detail-page"><article className="saved-card shared-saved-card"><div className="saved-cover">{cover ? <img src={cover} alt="分享日记封面" /> : <div className="cover-placeholder">Meloday</div>}</div><div className="saved-main"><span className="eyebrow">{entry.authorName} · {formatDate(entry.publishedAt)}</span><h1>{entry.title}</h1><p className="saved-summary">{entry.summary}</p>{audio && <AudioPlayer src={audio} />}</div><div className="saved-body">{entry.body.split(/\n+/).map((paragraph, index) => <p key={`${paragraph}-${index}`}>{paragraph}</p>)}</div></article></div>;
+  return <div className="page-scroll detail-page"><article className="saved-card shared-saved-card"><div className="saved-cover">{cover ? <Image src={cover} alt="分享日记封面" fill sizes="(max-width: 700px) 310px, 230px" unoptimized /> : <div className="cover-placeholder">Meloday</div>}</div><div className="saved-main"><span className="eyebrow">{entry.authorName} · {formatDate(entry.publishedAt)}</span><h1>{entry.title}</h1><p className="saved-summary">{entry.summary}</p>{audio && <AudioPlayer src={audio} />}</div></article></div>;
 }

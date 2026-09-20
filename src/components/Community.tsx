@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { apiFetch, formatDate, mediaUrl } from "@/lib/client";
 import type { CommunityItem } from "@/lib/types";
@@ -17,8 +18,8 @@ export function Community() {
     const cover = mediaUrl(item.coverAssetId);
     const authorAvatar = mediaUrl(item.authorAvatarAssetId);
     return <button type="button" className="community-card" onClick={() => setSelectedEntryId(item.entryId)} key={item.entryId} aria-label={`查看${item.authorName}分享的《${item.title}》`}>
-      <div className="community-cover">{cover ? <img src={cover} alt="公开日记封面" /> : <span>♫</span>}</div>
-      <div className="community-copy"><div className="author-line"><span className="avatar-mini">{authorAvatar ? <img src={authorAvatar} alt="" /> : item.authorName.slice(0, 1)}</span><span>{item.authorName}</span><time>{formatDate(item.publishedAt)}</time></div><h2>{item.title}</h2><p>{item.summary}</p></div>
+      <div className="community-cover">{cover ? <Image src={cover} alt="公开日记封面" fill sizes="(max-width: 700px) 50vw, 250px" unoptimized /> : <span>♫</span>}</div>
+      <div className="community-copy"><div className="author-line"><span className="avatar-mini">{authorAvatar ? <Image src={authorAvatar} alt="" fill sizes="28px" unoptimized /> : item.authorName.slice(0, 1)}</span><span>{item.authorName}</span><time>{formatDate(item.publishedAt)}</time></div><h2>{item.title}</h2><p>{item.summary}</p></div>
     </button>;
   })}</div>}{selectedEntryId && <SharedDiaryDialog id={selectedEntryId} onClose={() => setSelectedEntryId(null)} />}</div>;
 }

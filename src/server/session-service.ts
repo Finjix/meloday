@@ -2,7 +2,7 @@ import { HttpError } from "./errors";
 import { expiresAtIso } from "./config";
 import { createActiveSession, deleteActiveSession, getActiveSession, getSessionMessages, addSessionMessage, markExpiredSessions, setActiveSessionStatus, touchActiveSession } from "./repositories";
 import { DEFAULT_AGENT_STATE, EMPTY_DIARY_DRAFT, draftText, mergeAgentState, type AgentState, type DiaryDraft, type MusicDirection, type SessionSnapshot } from "@/lib/types";
-import { generateAgentTurn, organizeRecentDiary } from "./providers";
+import { generateAgentTurn } from "./providers";
 
 export function newSession(userId: string): SessionSnapshot {
   markExpiredSessions();
@@ -40,7 +40,7 @@ const quickMusicPresets: Record<QuickMusicPreset, QuickMusicDetails> = {
 export function newQuickMusicSession(userId: string, preset: QuickMusicPreset): SessionSnapshot {
   const session = newSession(userId);
   const details = quickMusicPresets[preset];
-  const draft: DiaryDraft = { ...EMPTY_DIARY_DRAFT, recentText: details.diaryText, userTurnCount: 1, turnsSinceOrganization: 1 };
+  const draft: DiaryDraft = { ...EMPTY_DIARY_DRAFT, recentText: details.diaryText, userTurnCount: 1 };
   const state: AgentState = { ...DEFAULT_AGENT_STATE, emotion: details.emotion, responseNeed: "鼓励", musicDirection: details.musicDirection, completeness: 1 };
   addSessionMessage(session.id, "user", details.userMessage);
   addSessionMessage(session.id, "agent", details.agentMessage);
@@ -71,12 +71,9 @@ function assertActive(id: string, userId: string): SessionSnapshot {
   return snapshot;
 }
 
-function shouldOrganize(draft: DiaryDraft, content: string): boolean {
-  return draft.turnsSinceOrganization >= 3 || content.length >= 600;
-}
-
-function recentUserMessages(snapshot: SessionSnapshot, count: number) {
-  return snapshot.messages.filter((message) => message.role === "user").slice(-Math.max(count, 1));
+function explicitlyRequestsGeneration(content: string): boolean {
+  const text = content.trim();
+  return /^(开始生成(?:吧)?|就这些了?|帮我生成音乐|生成音乐|可以生成了?|可以开始了?|开始吧|做成音乐)[。！!，,]?$/i.test(text) || /(?:重新|再)生成|(?:换成|换个|改成|改为).*(?:音乐|旋律|曲子|风格|节奏|配器)|(?:音乐|旋律|曲子).*(?:换成|改成|改为)/i.test(text);
 }
 
 export async function receiveMessage(id: string, userId: string, userName: string, content: string): Promise<{ snapshot: SessionSnapshot; shouldGenerate: boolean; generationReason: string | null }> {
@@ -85,23 +82,20 @@ export async function receiveMessage(id: string, userId: string, userName: strin
   const withUser = getSessionSnapshot(id, userId)!;
   const reply = await generateAgentTurn({ userName, userMessage: content, state: before.state, draft: before.draft, recentMessages: withUser.messages.slice(-12) });
   const state = mergeAgentState(before.state, reply.statePatch);
-  let draft: DiaryDraft = {
+  const draft: DiaryDraft = {
     ...before.draft,
     userTurnCount: before.draft.userTurnCount + 1,
-    turnsSinceOrganization: before.draft.turnsSinceOrganization + 1,
+    turnsSinceOrganization: 0,
     recentText: [before.draft.recentText, content.trim()].filter(Boolean).join("\n"),
   };
-
-  if (shouldOrganize(draft, content)) {
-    const stableText = [before.draft.stableText, before.draft.recentText].filter(Boolean).join("\n\n").trim();
-    const organized = await organizeRecentDiary({ stableText, recentMessages: recentUserMessages(withUser, draft.turnsSinceOrganization) });
-    draft = { ...draft, stableText, recentText: organized, turnsSinceOrganization: 0 };
-  }
 
   const replyText = reply.replyParts.join("\n");
   addSessionMessage(id, "agent", replyText);
   touchActiveSession(id, { state, draft, expiresAt: expiresAtIso() });
-  return { snapshot: getSessionSnapshot(id, userId)!, shouldGenerate: reply.shouldGenerate, generationReason: reply.generationReason };
+  const userRequestedGeneration = explicitlyRequestsGeneration(content);
+  const hasMinimumUserTurns = draft.userTurnCount >= 8;
+  const shouldGenerate = userRequestedGeneration || (hasMinimumUserTurns && (reply.shouldGenerate || state.completeness >= 0.8));
+  return { snapshot: getSessionSnapshot(id, userId)!, shouldGenerate, generationReason: userRequestedGeneration ? "用户主动要求生成" : reply.generationReason ?? (shouldGenerate ? "日记信息已经收集完成" : null) };
 }
 
 export function endSession(id: string, userId: string): void {
