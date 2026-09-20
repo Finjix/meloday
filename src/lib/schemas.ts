@@ -7,6 +7,7 @@ const credentialsSchema = z.object({
 });
 
 export const registerSchema = credentialsSchema.extend({
+  username: z.string().min(2, "用户名至少需要 2 位。").max(8, "用户名最多只能有 8 位。"),
   confirmPassword: z.string().min(8).max(128),
 }).refine((input) => input.password === input.confirmPassword, {
   path: ["confirmPassword"],

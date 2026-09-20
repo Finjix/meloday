@@ -1,3 +1,10 @@
+export type DiaryCheckinStatus = {
+  checkedToday: boolean;
+  totalDays: number;
+  progress: number;
+  rewardReady: boolean;
+};
+
 export type User = {
   id: string;
   username: string;
@@ -101,6 +108,12 @@ export type CommunityItem = {
   summary: string;
   audioAssetId: string | null;
   coverAssetId: string | null;
+  authorName: string;
+  authorAvatarAssetId: string | null;
+  publishedAt: string;
+};
+
+export type SharedDiaryEntry = Pick<DiaryEntry, "id" | "title" | "summary" | "body" | "audioAssetId" | "coverAssetId" | "createdAt"> & {
   authorName: string;
   authorAvatarAssetId: string | null;
   publishedAt: string;

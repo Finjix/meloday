@@ -7,7 +7,7 @@ import { rememberHomeReturn } from "@/lib/client";
 const items = [
   { href: "/", label: "今天", icon: "✦" },
   { href: "/diary", label: "日记本", icon: "▤" },
-  { href: "/community", label: "社区", icon: "◌" },
+  { href: "/community", label: "分享", icon: "◌" },
   { href: "/mine", label: "我的", icon: "⌂" },
 ];
 

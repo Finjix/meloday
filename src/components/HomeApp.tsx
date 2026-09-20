@@ -28,6 +28,7 @@ export function HomeApp() {
   const [job, setJobState] = useState<GenerationJob | null>(cachedJob);
   const [input, setInputState] = useState(cachedInput);
   const [creating, setCreating] = useState(false);
+  const [sessionTransitioning, setSessionTransitioning] = useState(false);
   const [sending, setSending] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
@@ -112,14 +113,19 @@ export function HomeApp() {
   }, []);
 
   const startSession = async () => {
+    const replaceCurrentSession = Boolean(session);
     setCreating(true); setNotice(""); setJob(null);
+    if (replaceCurrentSession) setSessionTransitioning(true);
     try {
-      const next = await apiFetch<SessionSnapshot>("/api/sessions", { method: "POST", body: JSON.stringify({}) });
+      const request = apiFetch<SessionSnapshot>("/api/sessions", { method: "POST", body: JSON.stringify({}) });
+      if (replaceCurrentSession) await new Promise((resolve) => window.setTimeout(resolve, 180));
+      const next = await request;
       setSession(next);
       setInput("");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "暂时无法开始新的日记。");
     } finally {
+      setSessionTransitioning(false);
       setCreating(false);
     }
   };
@@ -209,7 +215,7 @@ export function HomeApp() {
   const noticeView = notice && <div className="notice" role="status">{notice}</div>;
   const pageStyle = { "--keyboard-offset": `${keyboardOffset}px` } as CSSProperties;
 
-  return <div className={`page-scroll home-page${session && job?.status !== "succeeded" ? " home-page--session" : ""}`} style={pageStyle}>
+  return <div className={`page-scroll home-page${session ? " home-page--session" : ""}`} style={pageStyle}>
     {!session && <div className="home-heading">
       <div><span className="eyebrow">{formatDate(new Date().toISOString())}</span><h1>{currentGreeting()}{user.displayName}</h1><p>把今天的片段，慢慢变成一段音乐。</p></div>
     </div>}
@@ -221,10 +227,8 @@ export function HomeApp() {
     </section>}
 
     {session && <>
-      {job?.status === "succeeded" ? <>
-        <GenerationCard job={job} onSave={saveJob} onBack={returnToWriting} saving={saving} />
-        {noticeView}
-      </> : <div className="home-writing">
+      {job?.status === "succeeded" && <GenerationCard job={job} onSave={saveJob} onBack={returnToWriting} saving={saving} />}
+      <div key={session.id} className={`home-writing ${sessionTransitioning ? "home-writing--exit" : "home-writing--enter"}`}>
         <section className="agent-panel" aria-label={`${user.agentName} 的当前回复`}>
           <div className="agent-avatar" aria-hidden="true"><span>♫</span><i /></div>
           <div className="agent-bubble">
@@ -252,7 +256,7 @@ export function HomeApp() {
             </div>
           </form>
         </div>
-      </div>}
+      </div>
     </>}
     {!session && noticeView}
   </div>;

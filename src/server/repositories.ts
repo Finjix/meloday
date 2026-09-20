@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getDb } from "./db";
 import { HttpError } from "./errors";
-import { DEFAULT_AGENT_STATE, type AgentState, type ChatMessage, type DiaryDraft, type DiaryEntry, type GenerationJob, type GenerationStage, type GenerationStatus, type MusicDirection, type SessionStatus, type User, type CommunityItem } from "@/lib/types";
+import { DEFAULT_AGENT_STATE, type AgentState, type ChatMessage, type DiaryDraft, type DiaryEntry, type GenerationJob, type GenerationStage, type GenerationStatus, type MusicDirection, type SessionStatus, type User, type CommunityItem, type SharedDiaryEntry, type DiaryCheckinStatus } from "@/lib/types";
 
 type UserRow = {
   id: string;
@@ -61,6 +61,13 @@ function parseJson<T>(value: string | null, fallback: T): T {
   }
 }
 
+function getCheckinDate(value = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(value);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+
 export function mapUser(row: UserRow): User {
   return {
     id: row.id,
@@ -88,7 +95,7 @@ export function createUser(input: { username: string; displayName: string; passw
   const createdAt = new Date().toISOString();
   getDb().prepare(
     "INSERT INTO users (id, username, display_name, agent_name, diary_limit, created_at, password_hash) VALUES (?, ?, ?, ?, ?, ?, ?)",
-  ).run(id, input.username, input.displayName, input.username, 31, createdAt, input.passwordHash);
+  ).run(id, input.username, input.displayName, input.username, 30, createdAt, input.passwordHash);
   return getUserById(id)!;
 }
 
@@ -121,7 +128,15 @@ export function countUserDiaries(userId: string): number {
 
 export function getCapacity(userId: string): { used: number; limit: number } {
   const user = getUserById(userId);
-  return { used: countUserDiaries(userId), limit: user?.diaryLimit ?? 31 };
+  return { used: countUserDiaries(userId), limit: user?.diaryLimit ?? 30 }; 
+}
+
+export function getDiaryCheckinStatus(userId: string): DiaryCheckinStatus {
+  const rows = getDb().prepare("SELECT checkin_date FROM diary_checkins WHERE user_id = ? ORDER BY checkin_date DESC").all(userId) as Array<{ checkin_date: string }>;
+  const today = getCheckinDate();
+  const totalDays = rows.length;
+  const rewardReady = totalDays > 0 && totalDays % 7 === 0;
+  return { checkedToday: rows.some((row) => row.checkin_date === today), totalDays, progress: totalDays % 7, rewardReady };
 }
 
 export function createAuthSession(input: { userId: string; tokenHash: string; expiresAt: string }): void {
@@ -392,8 +407,14 @@ export function saveDiaryEntry(input: { userId: string; generationId: string; ti
     if (!generation) throw new Error("Generation job not found");
     const capacity = db.prepare("SELECT diary_limit FROM users WHERE id = ?").get(input.userId) as { diary_limit: number } | undefined;
     const used = db.prepare("SELECT COUNT(*) AS count FROM diary_entries WHERE user_id = ?").get(input.userId) as { count: number };
-    if (!capacity || Number(used.count) >= capacity.diary_limit) throw new HttpError(409, "CAPACITY_REACHED", `日记容量已用满（${capacity?.diary_limit ?? 31} 篇）。扩容入口暂未开放。`);
+    if (!capacity || Number(used.count) >= capacity.diary_limit) throw new HttpError(409, "CAPACITY_REACHED", `日记容量已用满（${capacity?.diary_limit ?? 30} 篇）。请在“我的”页面购买扩容。`);
     db.prepare("INSERT INTO diary_entries (id, user_id, generation_id, title, summary, body, music_direction_json, audio_asset_id, cover_asset_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(entryId, input.userId, input.generationId, input.title, input.summary, input.body, JSON.stringify(input.musicDirection), input.audioAssetId, input.coverAssetId, now, now);
+    const checkinDate = getCheckinDate();
+    const checkin = db.prepare("INSERT INTO diary_checkins (user_id, checkin_date, entry_id, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, checkin_date) DO NOTHING").run(input.userId, checkinDate, entryId, now);
+    if (checkin.changes && getDiaryCheckinStatus(input.userId).rewardReady) {
+      db.prepare("INSERT INTO capacity_grants (id, user_id, amount, reason, created_at) VALUES (?, ?, ?, ?, ?)").run(randomUUID(), input.userId, 1, `diary-checkin:${checkinDate}`, now);
+      db.prepare("UPDATE users SET diary_limit = diary_limit + 1 WHERE id = ?").run(input.userId);
+    }
     db.prepare("UPDATE active_sessions SET status = 'completed', state_json = ?, stable_text = '', recent_text = '', user_turn_count = 0, turns_since_organization = 0, expires_at = ? WHERE id = ? AND user_id = ?").run(JSON.stringify(DEFAULT_AGENT_STATE), now, generation.session_id, input.userId);
     db.prepare("DELETE FROM session_messages WHERE session_id = ?").run(generation.session_id);
   });
@@ -435,6 +456,17 @@ export function listCommunityItems(limit = 30, offset = 0): CommunityItem[] {
     ORDER BY p.published_at DESC LIMIT ? OFFSET ?
   `).all(Math.min(limit, 50), Math.max(offset, 0)) as Array<{ entry_id: string; title: string; summary: string; audio_asset_id: string | null; cover_asset_id: string | null; author_name: string; author_avatar_asset_id: string | null; published_at: string }>;
   return rows.map((row) => ({ entryId: row.entry_id, title: row.title, summary: row.summary, audioAssetId: row.audio_asset_id, coverAssetId: row.cover_asset_id, authorName: row.author_name, authorAvatarAssetId: row.author_avatar_asset_id, publishedAt: row.published_at }));
+}
+
+export function getSharedDiaryEntry(id: string): SharedDiaryEntry | null {
+  const row = getDb().prepare(`
+    SELECT d.id AS entry_id, d.title, d.summary, d.body, d.audio_asset_id, d.cover_asset_id, d.created_at,
+      u.display_name AS author_name, u.avatar_asset_id AS author_avatar_asset_id, p.published_at
+    FROM community_posts p JOIN diary_entries d ON d.id = p.entry_id JOIN users u ON u.id = p.user_id
+    WHERE d.id = ?
+  `).get(id) as { entry_id: string; title: string; summary: string; body: string; audio_asset_id: string | null; cover_asset_id: string | null; created_at: string; author_name: string; author_avatar_asset_id: string | null; published_at: string } | undefined;
+  if (!row) return null;
+  return { id: row.entry_id, title: row.title, summary: row.summary, body: row.body, audioAssetId: row.audio_asset_id, coverAssetId: row.cover_asset_id, createdAt: row.created_at, authorName: row.author_name, authorAvatarAssetId: row.author_avatar_asset_id, publishedAt: row.published_at };
 }
 
 export function deleteOrphanedMedia(): Array<{ id: string; storagePath: string }> {

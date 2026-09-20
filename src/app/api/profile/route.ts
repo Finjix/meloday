@@ -1,14 +1,14 @@
 import { apiError, ok, requireJsonObject } from "@/server/errors";
 import { assertSameOrigin, requireRequestUser } from "@/server/auth";
 import { parseOrThrow, profileSchema } from "@/lib/schemas";
-import { getCapacity, updateUserProfile } from "@/server/repositories";
+import { getCapacity, getDiaryCheckinStatus, updateUserProfile } from "@/server/repositories";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {
     const user = requireRequestUser(request);
-    return ok({ user, capacity: getCapacity(user.id) });
+    return ok({ user, capacity: getCapacity(user.id), checkin: getDiaryCheckinStatus(user.id) });
   } catch (error) {
     return apiError(error);
   }

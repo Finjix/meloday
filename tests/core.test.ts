@@ -223,6 +223,7 @@ test("API flow covers auth, three-turn organization, generation, save, publish a
   const duplicate = await registerRoute.POST(jsonRequest("/api/auth/register", "POST", { username: "apiuser", password: "api password", confirmPassword: "api password" }));
   assert.equal(duplicate.status, 409);
   assert.equal((await registerRoute.POST(jsonRequest("/api/auth/register", "POST", { username: "mismatch", password: "api password", confirmPassword: "different password" }))).status, 400);
+  assert.equal((await registerRoute.POST(jsonRequest("/api/auth/register", "POST", { username: "toolong99", password: "api password", confirmPassword: "api password" }))).status, 400);
   assert.equal((await loginRoute.POST(jsonRequest("/api/auth/login", "POST", { username: "apiuser", password: "wrong password" }))).status, 401);
   const loggedIn = await loginRoute.POST(jsonRequest("/api/auth/login", "POST", { username: "apiuser", password: "api password" }));
   assert.equal(loggedIn.status, 200);
@@ -265,7 +266,7 @@ test("API flow covers auth, three-turn organization, generation, save, publish a
   assert.equal((await read(await communityRoute.GET(jsonRequest("/api/community", "GET")))).data.items.length, 1);
   assert.equal((await read(await unpublishRoute.POST(jsonRequest(`/api/diaries/${saved.id}/unpublish`, "POST", {}, cookie), context(saved.id)))).data.publishedAt, null);
 
-  const secondUserResponse = await registerRoute.POST(jsonRequest("/api/auth/register", "POST", { username: "seconduser", password: "second password", confirmPassword: "second password" }));
+  const secondUserResponse = await registerRoute.POST(jsonRequest("/api/auth/register", "POST", { username: "second1", password: "second password", confirmPassword: "second password" }));
   const secondCookie = getCookie(secondUserResponse);
   assert.equal((await read(await diaryRoute.GET(jsonRequest(`/api/diaries/${saved.id}`, "GET", undefined, secondCookie), context(saved.id)))).data, null);
   assert.equal((await read(await generationRoute.GET(jsonRequest(`/api/generations/${regenerated.id}`, "GET", undefined, secondCookie), context(regenerated.id)))).error?.code, "GENERATION_NOT_FOUND");

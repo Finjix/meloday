@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
     const input = parseOrThrow(registerSchema, requireJsonObject(await request.json()));
-    const username = validateUsername(input.username);
+    const username = validateUsername(input.username, 8);
     const password = validatePassword(input.password);
     if (getUserByUsername(username)) return NextResponse.json({ error: { code: "USERNAME_TAKEN", message: "这个用户名已经被使用了。" } }, { status: 409 });
     const user = createUser({ username, displayName: username, passwordHash: await hashPassword(password) });

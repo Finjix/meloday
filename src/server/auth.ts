@@ -91,9 +91,13 @@ export function assertSameOrigin(request: Request): void {
   if (origin !== requestOrigin) throw new HttpError(403, "BAD_ORIGIN", "请求来源不受信任。");
 }
 
-export function validateUsername(username: string): string {
+export function validateUsername(username: string, maxLength = 24): string {
   const normalized = username.trim();
-  if (!/^[\p{L}\p{N}_-]{2,24}$/u.test(normalized)) throw new HttpError(400, "INVALID_USERNAME", "用户名需为 2-24 位字母、数字、下划线或短横线。");
+  const length = Array.from(normalized).length;
+  const range = `2-${maxLength}`;
+  if (length < 2 || length > maxLength || !/^[\p{L}\p{N}_-]+$/u.test(normalized)) {
+    throw new HttpError(400, "INVALID_USERNAME", `用户名需为 ${range} 位字母、数字、下划线或短横线。`);
+  }
   return normalized;
 }
 

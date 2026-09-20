@@ -14,7 +14,7 @@ const migrations: Array<{ version: number; sql: string }> = [
         agent_name TEXT NOT NULL DEFAULT 'Melody',
         avatar_asset_id TEXT,
         password_hash TEXT NOT NULL,
-        diary_limit INTEGER NOT NULL DEFAULT 31 CHECK (diary_limit >= 0),
+        diary_limit INTEGER NOT NULL DEFAULT 30 CHECK (diary_limit >= 0),
         created_at TEXT NOT NULL
       );
 
@@ -127,6 +127,25 @@ const migrations: Array<{ version: number; sql: string }> = [
     version: 3,
     sql: `
       UPDATE users SET agent_name = username WHERE agent_name = 'Melody';
+    `,
+  },
+  {
+    version: 4,
+    sql: `
+      UPDATE users SET diary_limit = 30 WHERE diary_limit = 31;
+    `,
+  },
+  {
+    version: 5,
+    sql: `
+      CREATE TABLE IF NOT EXISTS diary_checkins (
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        checkin_date TEXT NOT NULL,
+        entry_id TEXT NOT NULL UNIQUE REFERENCES diary_entries(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, checkin_date)
+      );
+      CREATE INDEX IF NOT EXISTS idx_diary_checkins_user_date ON diary_checkins(user_id, checkin_date DESC);
     `,
   },
 ];
