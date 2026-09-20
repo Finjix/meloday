@@ -11,9 +11,16 @@ export async function GET(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const media = await readMediaForUser(id, getRequestUser(request)?.id ?? null);
     const totalLength = media.buffer.length;
-    const headers = new Headers({ "Content-Type": media.mimeType, "Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600" });
+    const headers = new Headers({
+      "Content-Type": media.mimeType,
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+      "Cross-Origin-Resource-Policy": "same-origin",
+      "Content-Security-Policy": "sandbox; default-src 'none'",
+    });
     if (new URL(request.url).searchParams.get("download") === "1") {
-      const extension = media.mimeType === "image/jpeg" ? "jpg" : media.mimeType === "image/png" ? "png" : media.mimeType === "image/svg+xml" ? "svg" : "img";
+      const extension = media.mimeType === "image/jpeg" ? "jpg" : media.mimeType === "image/png" ? "png" : media.mimeType === "image/webp" ? "webp" : media.mimeType === "audio/mpeg" ? "mp3" : media.mimeType === "audio/wav" ? "wav" : "bin";
       headers.set("Content-Disposition", `attachment; filename="meloday-cover.${extension}"`);
     }
     const rangeHeader = request.headers.get("range");

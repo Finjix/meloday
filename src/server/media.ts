@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { config, ensureRuntimeDirs } from "./config";
@@ -7,10 +7,27 @@ import { HttpError } from "./errors";
 
 type MediaKind = "audio" | "cover" | "avatar";
 
-function safeExtension(extension: string): string {
+const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
+const mimeExtensions: Record<MediaKind, Record<string, string>> = {
+  audio: { "audio/mpeg": "mp3", "audio/wav": "wav" },
+  cover: { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" },
+  avatar: { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" },
+};
+
+function isMatchingSignature(buffer: Buffer, mimeType: string): boolean {
+  if (mimeType === "image/jpeg") return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  if (mimeType === "image/png") return buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  if (mimeType === "image/webp") return buffer.length >= 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP";
+  if (mimeType === "audio/wav") return buffer.length >= 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WAVE";
+  return buffer.length >= 3 && (buffer.subarray(0, 3).toString("ascii") === "ID3" || (buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0));
+}
+
+function safeExtension(kind: MediaKind, mimeType: string, extension: string): string {
   const normalized = extension.toLowerCase().replace(/[^a-z0-9]/g, "");
   if (!normalized || normalized.length > 8) throw new HttpError(400, "INVALID_MEDIA_EXTENSION", "媒体格式不受支持。");
-  return normalized;
+  const expected = mimeExtensions[kind][mimeType];
+  if (!expected || normalized !== expected) throw new HttpError(400, "INVALID_MEDIA_FORMAT", "媒体格式不受支持。");
+  return expected;
 }
 
 function absoluteStoragePath(relativePath: string): string {
@@ -23,13 +40,16 @@ function absoluteStoragePath(relativePath: string): string {
 
 export async function writeMedia(kind: MediaKind, ownerUserId: string, buffer: Buffer, mimeType: string, extension: string): Promise<string> {
   ensureRuntimeDirs();
-  if (!buffer.length || buffer.length > 25 * 1024 * 1024) throw new HttpError(413, "MEDIA_TOO_LARGE", "生成的媒体文件过大。");
-  const relativePath = path.join(kind, ownerUserId, `${Date.now()}-${createHash("sha256").update(buffer).digest("hex").slice(0, 16)}.${safeExtension(extension)}`);
+  if (!buffer.length || buffer.length > MAX_MEDIA_BYTES) throw new HttpError(413, "MEDIA_TOO_LARGE", "生成的媒体文件过大。");
+  const safeMimeType = mimeType.toLowerCase();
+  const safeFileExtension = safeExtension(kind, safeMimeType, extension);
+  if (!isMatchingSignature(buffer, safeMimeType)) throw new HttpError(400, "INVALID_MEDIA_CONTENT", "媒体内容与格式不匹配。");
+  const relativePath = path.join(/*turbopackIgnore: true*/ kind, ownerUserId, `${randomUUID()}.${safeFileExtension}`);
   const target = absoluteStoragePath(relativePath);
   await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, buffer, { flag: "wx" });
   try {
-    return createMediaAsset({ ownerUserId, kind, storagePath: relativePath, mimeType, byteSize: buffer.length });
+    return createMediaAsset({ ownerUserId, kind, storagePath: relativePath, mimeType: safeMimeType, byteSize: buffer.length });
   } catch (error) {
     await unlink(target).catch(() => undefined);
     throw error;
@@ -38,9 +58,17 @@ export async function writeMedia(kind: MediaKind, ownerUserId: string, buffer: B
 
 export async function readMediaForUser(assetId: string, userId: string | null): Promise<{ buffer: Buffer; mimeType: string; byteSize: number }> {
   const asset = getMediaAsset(assetId);
-  if (!asset || !canReadMedia(assetId, userId)) throw new HttpError(404, "MEDIA_NOT_FOUND", "媒体不存在或不可访问。");
-  const buffer = await readFile(absoluteStoragePath(asset.storagePath));
-  return { buffer, mimeType: asset.mimeType, byteSize: asset.byteSize };
+  if (!asset || !mimeExtensions[asset.kind][asset.mimeType] || !canReadMedia(assetId, userId)) {
+    throw new HttpError(404, "MEDIA_NOT_FOUND", "媒体不存在或不可访问。");
+  }
+  try {
+    const buffer = await readFile(absoluteStoragePath(asset.storagePath));
+    if (!isMatchingSignature(buffer, asset.mimeType)) throw new HttpError(404, "MEDIA_NOT_FOUND", "媒体不存在或不可访问。");
+    return { buffer, mimeType: asset.mimeType, byteSize: asset.byteSize };
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(404, "MEDIA_NOT_FOUND", "媒体不存在或不可访问。");
+  }
 }
 
 export async function removeOrphanedMedia(): Promise<number> {

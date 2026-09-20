@@ -1,10 +1,12 @@
 import { HttpError } from "./errors";
 import { expiresAtIso } from "./config";
-import { createActiveSession, deleteActiveSession, getActiveSession, getSessionMessages, addSessionMessage, markExpiredSessions, setActiveSessionStatus, touchActiveSession } from "./repositories";
+import { claimActiveSessionForGeneration, createActiveSession, deleteActiveSession, deleteSessionMessage, getActiveSession, getSessionMessages, addSessionMessage, markExpiredSessions, setActiveSessionStatus, touchActiveSession } from "./repositories";
 import { DEFAULT_AGENT_STATE, EMPTY_DIARY_DRAFT, draftText, mergeAgentState, type AgentState, type DiaryDraft, type MusicDirection, type SessionSnapshot } from "@/lib/types";
 import { generateAgentTurn } from "./providers";
+import { enforceRateLimit } from "./rate-limit";
 
 export function newSession(userId: string): SessionSnapshot {
+  enforceRateLimit("session", userId, { limit: 20, windowMs: 60 * 60 * 1000 });
   markExpiredSessions();
   const id = createActiveSession({ userId, expiresAt: expiresAtIso() });
   return getSessionSnapshot(id, userId)!;
@@ -77,10 +79,17 @@ function explicitlyRequestsGeneration(content: string): boolean {
 }
 
 export async function receiveMessage(id: string, userId: string, userName: string, content: string): Promise<{ snapshot: SessionSnapshot; shouldGenerate: boolean; generationReason: string | null }> {
+  enforceRateLimit("message", userId, { limit: 40, windowMs: 60 * 60 * 1000 });
   const before = assertActive(id, userId);
-  addSessionMessage(id, "user", content);
+  const userMessage = addSessionMessage(id, "user", content);
   const withUser = getSessionSnapshot(id, userId)!;
-  const reply = await generateAgentTurn({ userName, userMessage: content, state: before.state, draft: before.draft, recentMessages: withUser.messages.slice(-12) });
+  let reply;
+  try {
+    reply = await generateAgentTurn({ userName, userMessage: content, state: before.state, draft: before.draft, recentMessages: withUser.messages.slice(-12) });
+  } catch (error) {
+    deleteSessionMessage(userMessage.id);
+    throw error;
+  }
   const state = mergeAgentState(before.state, reply.statePatch);
   const draft: DiaryDraft = {
     ...before.draft,
@@ -107,7 +116,9 @@ export function endSession(id: string, userId: string): void {
 
 export function markSessionGenerating(id: string, userId: string): SessionSnapshot {
   assertActive(id, userId);
-  setActiveSessionStatus(id, "generating");
+  if (!claimActiveSessionForGeneration(id, userId)) {
+    throw new HttpError(409, "SESSION_NOT_ACTIVE", "当前日记不在可生成状态。");
+  }
   return getSessionSnapshot(id, userId)!;
 }
 

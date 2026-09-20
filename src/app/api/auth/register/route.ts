@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { parseOrThrow, registerSchema } from "@/lib/schemas";
 import { apiError, ok, requireJsonObject } from "@/server/errors";
-import { assertSameOrigin, createSessionCookie, hashPassword, setSessionCookie, validatePassword, validateUsername } from "@/server/auth";
+import { assertSameOrigin, createSessionCookie, hashPassword, requestClientKey, setSessionCookie, validatePassword, validateUsername } from "@/server/auth";
+import { enforceRateLimit } from "@/server/rate-limit";
 import { createUser, getUserByUsername } from "@/server/repositories";
 
 export const runtime = "nodejs";
@@ -9,6 +10,7 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
+    enforceRateLimit("register", requestClientKey(request), { limit: 8, windowMs: 60 * 60 * 1000 });
     const input = parseOrThrow(registerSchema, requireJsonObject(await request.json()));
     const username = validateUsername(input.username, 8);
     const password = validatePassword(input.password);

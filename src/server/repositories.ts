@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getDb } from "./db";
+import { expiresAtIso } from "./config";
 import { HttpError } from "./errors";
 import { DEFAULT_AGENT_STATE, type AgentState, type ChatMessage, type DiaryDraft, type DiaryEntry, type GenerationJob, type GenerationStage, type GenerationStatus, type MusicDirection, type SessionStatus, type User, type CommunityItem, type SharedDiaryEntry, type DiaryCheckinStatus } from "@/lib/types";
 
@@ -211,6 +212,10 @@ export function addSessionMessage(sessionId: string, role: "user" | "agent", con
   return message;
 }
 
+export function deleteSessionMessage(id: string): void {
+  getDb().prepare("DELETE FROM session_messages WHERE id = ?").run(id);
+}
+
 export function getSessionMessages(sessionId: string): ChatMessage[] {
   const rows = getDb().prepare("SELECT id, role, content, created_at FROM session_messages WHERE session_id = ? ORDER BY created_at, id").all(sessionId) as Array<{ id: string; role: "user" | "agent"; content: string; created_at: string }>;
   return rows.map((row) => ({ id: row.id, role: row.role, content: row.content, createdAt: row.created_at }));
@@ -220,8 +225,12 @@ export function deleteActiveSession(id: string): void {
   getDb().prepare("DELETE FROM active_sessions WHERE id = ?").run(id);
 }
 
+export function claimActiveSessionForGeneration(id: string, userId: string): boolean {
+  return getDb().prepare("UPDATE active_sessions SET status = 'generating', last_activity_at = ?, expires_at = ? WHERE id = ? AND user_id = ? AND status = 'active'").run(new Date().toISOString(), expiresAtIso(), id, userId).changes === 1;
+}
+
 export function setActiveSessionStatus(id: string, status: SessionStatus): void {
-  getDb().prepare("UPDATE active_sessions SET status = ?, last_activity_at = ?, expires_at = ? WHERE id = ?").run(status, new Date().toISOString(), new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), id);
+  getDb().prepare("UPDATE active_sessions SET status = ?, last_activity_at = ?, expires_at = ? WHERE id = ?").run(status, new Date().toISOString(), expiresAtIso(), id);
 }
 
 export function markExpiredSessions(): number {
@@ -315,7 +324,7 @@ export function markRunningJobsFailed(): number {
   const now = new Date().toISOString();
   const markFailed = db.transaction(() => {
     const changes = db.prepare("UPDATE generation_jobs SET status = 'failed', audio_asset_id = NULL, cover_asset_id = NULL, error_message = '服务重启后任务已结束，请重新生成。', updated_at = ? WHERE status IN ('queued', 'running')").run(now).changes;
-    db.prepare("UPDATE active_sessions SET status = 'active', last_activity_at = ?, expires_at = ? WHERE status = 'generating'").run(now, new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString());
+    db.prepare("UPDATE active_sessions SET status = 'active', last_activity_at = ?, expires_at = ? WHERE status = 'generating'").run(now, expiresAtIso());
     return changes;
   });
   return markFailed();
@@ -398,16 +407,27 @@ export function getDiaryEntry(id: string, userId: string): DiaryEntry | null {
   };
 }
 
+export function getDiaryEntryByGeneration(generationId: string, userId: string): DiaryEntry | null {
+  const row = getDb().prepare("SELECT id FROM diary_entries WHERE generation_id = ? AND user_id = ?").get(generationId, userId) as { id: string } | undefined;
+  return row ? getDiaryEntry(row.id, userId) : null;
+}
+
 export function saveDiaryEntry(input: { userId: string; generationId: string; title: string; summary: string; body: string; musicDirection: MusicDirection; audioAssetId: string | null; coverAssetId: string | null }): DiaryEntry {
   const db = getDb();
-  const entryId = randomUUID();
+  let entryId: string | null = null;
   const now = new Date().toISOString();
   const transaction = db.transaction(() => {
+    const existing = db.prepare("SELECT id FROM diary_entries WHERE generation_id = ? AND user_id = ?").get(input.generationId, input.userId) as { id: string } | undefined;
+    if (existing) {
+      entryId = existing.id;
+      return;
+    }
     const generation = db.prepare("SELECT session_id FROM generation_jobs WHERE id = ? AND user_id = ?").get(input.generationId, input.userId) as { session_id: string } | undefined;
     if (!generation) throw new Error("Generation job not found");
     const capacity = db.prepare("SELECT diary_limit FROM users WHERE id = ?").get(input.userId) as { diary_limit: number } | undefined;
     const used = db.prepare("SELECT COUNT(*) AS count FROM diary_entries WHERE user_id = ?").get(input.userId) as { count: number };
     if (!capacity || Number(used.count) >= capacity.diary_limit) throw new HttpError(409, "CAPACITY_REACHED", `日记容量已用满（${capacity?.diary_limit ?? 30} 篇）。请在“我的”页面购买扩容。`);
+    entryId = randomUUID();
     db.prepare("INSERT INTO diary_entries (id, user_id, generation_id, title, summary, body, music_direction_json, audio_asset_id, cover_asset_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(entryId, input.userId, input.generationId, input.title, input.summary, input.body, JSON.stringify(input.musicDirection), input.audioAssetId, input.coverAssetId, now, now);
     const checkinDate = getCheckinDate();
     const checkin = db.prepare("INSERT INTO diary_checkins (user_id, checkin_date, entry_id, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, checkin_date) DO NOTHING").run(input.userId, checkinDate, entryId, now);
@@ -419,7 +439,7 @@ export function saveDiaryEntry(input: { userId: string; generationId: string; ti
     db.prepare("DELETE FROM session_messages WHERE session_id = ?").run(generation.session_id);
   });
   transaction();
-  return getDiaryEntry(entryId, input.userId)!;
+  return getDiaryEntry(entryId!, input.userId)!;
 }
 
 export function deleteDiaryEntry(id: string, userId: string): { audioAssetId: string | null; coverAssetId: string | null } | null {

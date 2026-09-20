@@ -20,7 +20,13 @@ function cookieValue(cookieHeader: string | null, name: string): string | null {
   if (!cookieHeader) return null;
   for (const part of cookieHeader.split(";")) {
     const [key, ...rest] = part.trim().split("=");
-    if (key === name) return decodeURIComponent(rest.join("="));
+    if (key === name) {
+      try {
+        return decodeURIComponent(rest.join("="));
+      } catch {
+        return null;
+      }
+    }
   }
   return null;
 }
@@ -89,6 +95,13 @@ export function assertSameOrigin(request: Request): void {
   if (!origin) return;
   const requestOrigin = new URL(request.url).origin;
   if (origin !== requestOrigin) throw new HttpError(403, "BAD_ORIGIN", "请求来源不受信任。");
+}
+
+export function requestClientKey(request: Request): string {
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return forwarded || "unknown";
 }
 
 export function validateUsername(username: string, maxLength = 24): string {

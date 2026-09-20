@@ -9,9 +9,9 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "node --import tsx --test --test-concurrency=1 tests/core.test.ts",
-    "db:migrate": "tsx src/scripts/migrate.ts",
-    "cleanup": "tsx src/scripts/cleanup.ts",
-    "capacity:grant": "tsx src/scripts/grant-capacity.ts"
+    "db:migrate": "tsx --env-file-if-exists=.env.local src/scripts/migrate.ts",
+    "cleanup": "tsx --env-file-if-exists=.env.local src/scripts/cleanup.ts",
+    "capacity:grant": "tsx --env-file-if-exists=.env.local src/scripts/grant-capacity.ts"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.85.1",

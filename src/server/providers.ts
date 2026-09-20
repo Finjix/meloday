@@ -201,10 +201,15 @@ async function runPiPrompt(prompt: string): Promise<string> {
   const unsubscribe = session.subscribe((event) => {
     if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") output += event.assistantMessageEvent.delta;
   });
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    await session.prompt(prompt);
+    await Promise.race([
+      session.prompt(prompt),
+      new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new ProviderError("tokenhub", 504, "文本服务响应超时。")), config.generationTimeoutMs); }),
+    ]);
     return output;
   } finally {
+    if (timeout) clearTimeout(timeout);
     unsubscribe();
     session.dispose();
   }
@@ -269,6 +274,47 @@ export async function finalizeDiary(input: { draftText: string; state: AgentStat
 }
 
 type GeneratedFile = { buffer: Buffer; mimeType: string; extension: string };
+const MAX_PROVIDER_DOWNLOAD_BYTES = 25 * 1024 * 1024;
+
+export function assertSafeProviderDownloadUrl(value: string): URL {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new ProviderError("tokenhub", 502, "媒体服务返回了无效的下载地址。");
+  }
+  if (url.protocol !== "https:" || url.username || url.password || (url.port && url.port !== "443") || !config.tokenHubDownloadHosts.has(url.hostname.toLowerCase())) {
+    throw new ProviderError("tokenhub", 502, "媒体服务返回了不受信任的下载地址。");
+  }
+  return url;
+}
+
+async function readProviderDownload(urlText: string, signal: AbortSignal, allowedMimeTypes: readonly string[], provider: string, failureMessage: string): Promise<{ buffer: Buffer; mimeType: string }> {
+  const response = await fetch(assertSafeProviderDownloadUrl(urlText), { signal, redirect: "error" });
+  if (!response.ok) throw new ProviderError(provider, 502, failureMessage);
+  const mimeType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+  if (!allowedMimeTypes.includes(mimeType)) throw new ProviderError(provider, 502, "媒体服务返回了不受支持的文件类型。");
+  const declaredLength = Number(response.headers.get("content-length") ?? "0");
+  if (!Number.isSafeInteger(declaredLength) || declaredLength < 0 || declaredLength > MAX_PROVIDER_DOWNLOAD_BYTES) {
+    throw new ProviderError(provider, 502, "媒体服务返回的文件过大或长度无效。");
+  }
+  if (!response.body) throw new ProviderError(provider, 502, failureMessage);
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_PROVIDER_DOWNLOAD_BYTES) throw new ProviderError(provider, 502, "媒体服务返回的文件过大。");
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return { buffer: Buffer.concat(chunks, size), mimeType };
+}
 
 export function decodeHexAudio(value: string): Buffer {
   const hex = value.trim();
@@ -279,7 +325,9 @@ export function decodeHexAudio(value: string): Buffer {
 export function decodeBase64Image(value: string): Buffer {
   const encoded = value.trim();
   if (!encoded || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded) || encoded.length % 4 !== 0) throw new ProviderError("seedream", 502, "封面服务返回的图片格式不正确。");
-  return Buffer.from(encoded, "base64");
+  const buffer = Buffer.from(encoded, "base64");
+  if (buffer.length < 3 || buffer[0] !== 0xff || buffer[1] !== 0xd8 || buffer[2] !== 0xff) throw new ProviderError("seedream", 502, "封面服务返回的图片格式不正确。");
+  return buffer;
 }
 
 function silentWav(): Buffer {
@@ -295,8 +343,8 @@ function silentWav(): Buffer {
 }
 
 function fakeCover(): GeneratedFile {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="2048" viewBox="0 0 2048 2048"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#f5cda7"/><stop offset=".55" stop-color="#b7d5c7"/><stop offset="1" stop-color="#7f9c95"/></linearGradient></defs><rect width="2048" height="2048" rx="220" fill="url(#g)"/><circle cx="1520" cy="510" r="280" fill="#fff5dc" opacity=".7"/><path d="M230 1570c310-390 680-450 1130-120" fill="none" stroke="#fff8ed" stroke-width="34" stroke-linecap="round" opacity=".8"/><text x="160" y="330" fill="#435d58" font-family="sans-serif" font-size="100" font-weight="600">Meloday</text><text x="160" y="1780" fill="#fff8ed" font-family="sans-serif" font-size="76">今天，慢慢记下来的光</text></svg>`;
-  return { buffer: Buffer.from(svg), mimeType: "image/svg+xml", extension: "svg" };
+  // A valid transparent PNG keeps fake-mode media subject to the same safe image policy as production output.
+  return { buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlE1jUAAAAASUVORK5CYII=", "base64"), mimeType: "image/png", extension: "png" };
 }
 
 export async function generateMusic(direction: MusicDirection): Promise<GeneratedFile> {
@@ -315,10 +363,8 @@ export async function generateMusic(direction: MusicDirection): Promise<Generate
     if (!response.ok) throw new ProviderError("minimax-music", response.status, tokenHubFailureMessage(payload, "音乐服务", response.status));
     const audio = safeText(payload?.data?.audio);
     if (/^https?:\/\//i.test(audio)) {
-      const audioResponse = await fetch(audio, { signal: controller.signal });
-      if (!audioResponse.ok) throw new ProviderError("minimax-music", 502, "音乐文件下载失败。");
-      const mimeType = audioResponse.headers.get("content-type")?.split(";")[0] ?? "audio/mpeg";
-      return { buffer: Buffer.from(await audioResponse.arrayBuffer()), mimeType, extension: mimeType.includes("wav") ? "wav" : "mp3" };
+      const downloaded = await readProviderDownload(audio, controller.signal, ["audio/mpeg", "audio/wav"], "minimax-music", "音乐文件下载失败。");
+      return { buffer: downloaded.buffer, mimeType: downloaded.mimeType, extension: downloaded.mimeType === "audio/wav" ? "wav" : "mp3" };
     }
     return { buffer: decodeHexAudio(audio), mimeType: "audio/mpeg", extension: "mp3" };
   } catch (error) {
@@ -333,20 +379,29 @@ export async function generateMusic(direction: MusicDirection): Promise<Generate
 export async function generateCover(card: { title: string; summary: string; body: string; direction: MusicDirection }): Promise<GeneratedFile> {
   if (config.providerMode === "fake") return fakeCover();
   assertProviderConfiguration();
-  const response = await fetch(`${config.tokenHubBaseUrl}/wand/si-image/generation`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${config.tokenHubApiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: config.imageModel, prompt: `温暖、清新、治愈的音乐日记封面。${card.title}。${card.summary}。画面为柔和纸张质感、轻微手绘插画感、留白充足的方形构图，不出现可读文字，不出现人物肖像。音乐氛围：${card.direction.mood}、${card.direction.style}。`, size: "2048x2048", output_format: "jpeg", response_format: "b64_json", sequential_image_generation: "disabled", watermark: true }),
-    signal: AbortSignal.timeout(config.generationTimeoutMs),
-  });
-  const payload = await response.json().catch(() => null) as { data?: Array<{ b64_json?: string; url?: string }>; error?: { message?: unknown }; base_resp?: { status_msg?: unknown }; message?: unknown } | null;
-  if (!response.ok) throw new ProviderError("seedream", response.status, tokenHubFailureMessage(payload, "封面服务", response.status));
-  const item = payload?.data?.[0];
-  if (item?.b64_json) return { buffer: decodeBase64Image(item.b64_json), mimeType: "image/jpeg", extension: "jpg" };
-  if (item?.url) {
-    const imageResponse = await fetch(item.url, { signal: AbortSignal.timeout(config.generationTimeoutMs) });
-    if (!imageResponse.ok) throw new ProviderError("seedream", 502, "封面下载失败。");
-    return { buffer: Buffer.from(await imageResponse.arrayBuffer()), mimeType: imageResponse.headers.get("content-type")?.split(";")[0] ?? "image/jpeg", extension: "jpg" };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.generationTimeoutMs);
+  try {
+    const response = await fetch(`${config.tokenHubBaseUrl}/wand/si-image/generation`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${config.tokenHubApiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: config.imageModel, prompt: `温暖、清新、治愈的音乐日记封面。${card.title}。${card.summary}。画面为柔和纸张质感、轻微手绘插画感、留白充足的方形构图，不出现可读文字，不出现人物肖像。音乐氛围：${card.direction.mood}、${card.direction.style}。`, size: "2048x2048", output_format: "jpeg", response_format: "b64_json", sequential_image_generation: "disabled", watermark: true }),
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => null) as { data?: Array<{ b64_json?: string; url?: string }>; error?: { message?: unknown }; base_resp?: { status_msg?: unknown }; message?: unknown } | null;
+    if (!response.ok) throw new ProviderError("seedream", response.status, tokenHubFailureMessage(payload, "封面服务", response.status));
+    const item = payload?.data?.[0];
+    if (item?.b64_json) return { buffer: decodeBase64Image(item.b64_json), mimeType: "image/jpeg", extension: "jpg" };
+    if (item?.url) {
+      const downloaded = await readProviderDownload(item.url, controller.signal, ["image/jpeg"], "seedream", "封面下载失败。");
+      return { buffer: downloaded.buffer, mimeType: "image/jpeg", extension: "jpg" };
+    }
+    throw new ProviderError("seedream", 502, "封面服务没有返回图片。");
+  } catch (error) {
+    if (error instanceof ProviderError) throw error;
+    if (error instanceof DOMException && error.name === "AbortError") throw new ProviderError("seedream", 504, "封面服务响应超时。");
+    throw new ProviderError("seedream", 502, "无法连接封面服务。");
+  } finally {
+    clearTimeout(timeout);
   }
-  throw new ProviderError("seedream", 502, "封面服务没有返回图片。");
 }

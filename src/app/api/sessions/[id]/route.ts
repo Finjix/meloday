@@ -1,6 +1,7 @@
 import { apiError, ok } from "@/server/errors";
 import { assertSameOrigin, requireRequestUser } from "@/server/auth";
 import { endSession, getSessionSnapshot } from "@/server/session-service";
+import { removeOrphanedMedia } from "@/server/media";
 
 export const runtime = "nodejs";
 
@@ -24,6 +25,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     const user = requireRequestUser(request);
     const { id } = await context.params;
     endSession(id, user.id);
+    await removeOrphanedMedia();
     return ok({ ok: true });
   } catch (error) {
     return apiError(error);

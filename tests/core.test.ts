@@ -124,9 +124,12 @@ test("agent JSON, intent, state merge and provider decoders", async () => {
   assert.equal(card.title, "今天，慢慢记下来的光");
 
   assert.deepEqual(providers.decodeHexAudio("ff00"), Buffer.from([0xff, 0x00]));
-  assert.deepEqual(providers.decodeBase64Image(Buffer.from("image").toString("base64")), Buffer.from("image"));
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+  assert.deepEqual(providers.decodeBase64Image(jpeg.toString("base64")), jpeg);
   assert.throws(() => providers.decodeHexAudio("fg"), (error) => error instanceof providers.ProviderError);
   assert.throws(() => providers.decodeBase64Image("not base64?"), (error) => error instanceof providers.ProviderError);
+  assert.throws(() => providers.assertSafeProviderDownloadUrl("http://127.0.0.1/internal"), (error) => error instanceof providers.ProviderError);
+  assert.throws(() => providers.assertSafeProviderDownloadUrl("https://untrusted.example/file.mp3"), (error) => error instanceof providers.ProviderError);
 });
 
 test("sessions contain only diary state and messages", async () => {
@@ -148,7 +151,8 @@ test("capacity, saved-generation retention and media privacy", async () => {
   database.getDb().prepare("UPDATE users SET diary_limit = 1 WHERE id = ?").run(user.id);
 
   const sessionId = repositories.createActiveSession({ userId: user.id, expiresAt: new Date(Date.now() + 86400000).toISOString() });
-  const audioAssetId = await media.writeMedia("audio", user.id, Buffer.from("audio"), "audio/mpeg", "mp3");
+  const audioBuffer = Buffer.from("ID3audio");
+  const audioAssetId = await media.writeMedia("audio", user.id, audioBuffer, "audio/mpeg", "mp3");
   const job = repositories.createGenerationJob({ sessionId, userId: user.id, musicDirection: types.DEFAULT_AGENT_STATE.musicDirection });
   repositories.updateGenerationContent(job.id, { title: "一页", summary: "摘要", body: "正文", musicDirection: types.DEFAULT_AGENT_STATE.musicDirection });
   repositories.setGenerationAsset(job.id, "audio", audioAssetId);
@@ -156,6 +160,7 @@ test("capacity, saved-generation retention and media privacy", async () => {
 
   const saved = generation.saveGeneration(job.id, user.id);
   assert.equal(saved.title, "一页");
+  assert.equal(generation.saveGeneration(job.id, user.id).id, saved.id);
   assert.ok(repositories.getGenerationJob(job.id, user.id));
   assert.ok(repositories.getDiaryEntry(saved.id, user.id));
   assert.equal(repositories.getGenerationJob(job.id, other.id), null);
@@ -165,7 +170,7 @@ test("capacity, saved-generation retention and media privacy", async () => {
 
   repositories.publishDiaryEntry(saved.id, user.id);
   const publicMedia = await media.readMediaForUser(audioAssetId, null);
-  assert.equal(publicMedia.buffer.toString(), "audio");
+  assert.deepEqual(publicMedia.buffer, audioBuffer);
 
   const secondSession = repositories.createActiveSession({ userId: user.id, expiresAt: new Date(Date.now() + 86400000).toISOString() });
   const secondJob = repositories.createGenerationJob({ sessionId: secondSession, userId: user.id, musicDirection: types.DEFAULT_AGENT_STATE.musicDirection });
@@ -183,6 +188,7 @@ test("media storage rejects unsafe extensions", async () => {
   repositories.resetSchemaForTests();
   const user = repositories.createUser({ username: "mediauser", displayName: "Media", passwordHash: await auth.hashPassword("media password") });
   await assert.rejects(() => media.writeMedia("cover", user.id, Buffer.from("x"), "image/png", "../../"), (error) => assertHttpError(error, "INVALID_MEDIA_EXTENSION"));
+  await assert.rejects(() => media.writeMedia("cover", user.id, Buffer.from("not an image"), "image/png", "png"), (error) => assertHttpError(error, "INVALID_MEDIA_CONTENT"));
 });
 
 test("API flow covers auth, generation, save, publish and isolation", async () => {

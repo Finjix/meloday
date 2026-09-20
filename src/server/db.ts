@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { ensureRuntimeDirs, config } from "./config";
+import { ensureRuntimeDirs, config, expiresAtIso } from "./config";
 
 type GlobalWithDb = typeof globalThis & { __melodayDb?: Database.Database };
 
@@ -173,7 +173,7 @@ function createDb(): Database.Database {
 
   const now = new Date().toISOString();
   database.prepare("UPDATE generation_jobs SET status = 'failed', audio_asset_id = NULL, cover_asset_id = NULL, error_message = '服务重启后任务已结束，请重新生成。', updated_at = ? WHERE status IN ('queued', 'running')").run(now);
-  database.prepare("UPDATE active_sessions SET status = 'active', last_activity_at = ?, expires_at = ? WHERE status = 'generating'").run(now, new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString());
+  database.prepare("UPDATE active_sessions SET status = 'active', last_activity_at = ?, expires_at = ? WHERE status = 'generating'").run(now, expiresAtIso());
 
   return database;
 }
