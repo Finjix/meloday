@@ -1,13 +1,51 @@
 import { HttpError } from "./errors";
 import { expiresAtIso } from "./config";
 import { createActiveSession, deleteActiveSession, getActiveSession, getSessionMessages, addSessionMessage, markExpiredSessions, setActiveSessionStatus, touchActiveSession } from "./repositories";
-import { draftText, mergeAgentState, type AgentState, type DiaryDraft, type SessionSnapshot } from "@/lib/types";
+import { DEFAULT_AGENT_STATE, EMPTY_DIARY_DRAFT, draftText, mergeAgentState, type AgentState, type DiaryDraft, type MusicDirection, type SessionSnapshot } from "@/lib/types";
 import { generateAgentTurn, organizeRecentDiary } from "./providers";
 
 export function newSession(userId: string): SessionSnapshot {
   markExpiredSessions();
   const id = createActiveSession({ userId, expiresAt: expiresAtIso() });
   return getSessionSnapshot(id, userId)!;
+}
+
+export type QuickMusicPreset = "relax" | "move";
+
+type QuickMusicDetails = {
+  userMessage: string;
+  agentMessage: string;
+  diaryText: string;
+  emotion: string;
+  musicDirection: MusicDirection;
+};
+
+const quickMusicPresets: Record<QuickMusicPreset, QuickMusicDetails> = {
+  relax: {
+    userMessage: "我想放松一下，听一段音乐。",
+    agentMessage: "好，先放慢一点呼吸。我正在为你生成一段舒缓的旋律。",
+    diaryText: "想给自己留一点安静的时间，在舒缓的旋律里慢慢放松下来。",
+    emotion: "放松",
+    musicDirection: { mood: "宁静、放松、治愈", tempo: "慢速", style: "舒缓的氛围音乐", instruments: ["轻柔钢琴", "环境音", "温暖弦乐"] },
+  },
+  move: {
+    userMessage: "我想动起来，听一段欢快的音乐。",
+    agentMessage: "好呀！我正在为你生成一段轻快、有活力的旋律。",
+    diaryText: "想让身体和心情都跟着节奏轻快起来，给此刻一点明亮的能量。",
+    emotion: "欢快",
+    musicDirection: { mood: "欢快、明亮、充满活力", tempo: "中快速", style: "轻快的流行电子音乐", instruments: ["律动鼓点", "明亮吉他", "合成器"] },
+  },
+};
+
+export function newQuickMusicSession(userId: string, preset: QuickMusicPreset): SessionSnapshot {
+  const session = newSession(userId);
+  const details = quickMusicPresets[preset];
+  const draft: DiaryDraft = { ...EMPTY_DIARY_DRAFT, recentText: details.diaryText, userTurnCount: 1, turnsSinceOrganization: 1 };
+  const state: AgentState = { ...DEFAULT_AGENT_STATE, emotion: details.emotion, responseNeed: "鼓励", musicDirection: details.musicDirection, completeness: 1 };
+  addSessionMessage(session.id, "user", details.userMessage);
+  addSessionMessage(session.id, "agent", details.agentMessage);
+  touchActiveSession(session.id, { state, draft, expiresAt: expiresAtIso() });
+  return getSessionSnapshot(session.id, userId)!;
 }
 
 export function getSessionSnapshot(id: string, userId: string): SessionSnapshot | null {

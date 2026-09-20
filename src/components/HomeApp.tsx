@@ -21,6 +21,21 @@ let cachedSession: SessionSnapshot | null = null;
 let cachedJob: GenerationJob | null = null;
 let cachedInput = "";
 
+export function resetHomeCache(): void {
+  cachedSession = null;
+  cachedJob = null;
+  cachedInput = "";
+  cacheHomeState(null, null);
+}
+
+const agentAvatars = ["🌿", "🌙", "🐼", "🦊", "🌻", "🐳", "🍀", "🦋", "🌈", "🐣"];
+
+function agentAvatarForSession(sessionId: string): string {
+  let hash = 0;
+  for (const character of sessionId) hash = (hash * 31 + character.charCodeAt(0)) | 0;
+  return agentAvatars[(hash >>> 0) % agentAvatars.length];
+}
+
 export function HomeApp() {
   const { user, refresh } = useAuth();
   const router = useRouter();
@@ -130,6 +145,21 @@ export function HomeApp() {
     }
   };
 
+  const startQuickMusic = async (preset: "relax" | "move") => {
+    setCreating(true); setNotice(""); setJob(null);
+    try {
+      const result = await apiFetch<{ session: SessionSnapshot; job: GenerationJob }>("/api/quick-music", { method: "POST", body: JSON.stringify({ preset }) });
+      setSession(result.session);
+      setJob(result.job);
+      setInput("");
+      void pollGeneration(result.job.id);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "暂时无法开始生成音乐。");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const sendMessage = async () => {
     const content = input.trim();
     if (!content || !session || session.status !== "active" || sending || generationInFlight) return;
@@ -211,8 +241,9 @@ export function HomeApp() {
   if (!user) return null;
 
   const latestAgentMessage = session ? [...session.messages].reverse().find((message) => message.role === "agent") : undefined;
+  const agentAvatar = session ? agentAvatarForSession(session.id) : agentAvatars[0];
   const generating = generationInFlight;
-  const noticeView = notice && <div className="notice" role="status">{notice}</div>;
+  const noticeView = notice && <div className="notice home-notice" role="status">{notice}</div>;
   const pageStyle = { "--keyboard-offset": `${keyboardOffset}px` } as CSSProperties;
 
   return <div className={`page-scroll home-page${session ? " home-page--session" : ""}`} style={pageStyle}>
@@ -225,12 +256,20 @@ export function HomeApp() {
       <div><span className="eyebrow">给今天留一页</span><h2>你愿意和我说说今天吗？</h2><p>不用想得很完整，从一个画面、一句话，或者一种心情开始就好。</p><button className="button button-primary button-large" onClick={startSession} disabled={creating}>{creating ? "正在准备…" : "开始新日记  →"}</button></div>
       <div className="welcome-note"><span>随手写</span><span>慢慢说</span><span>留下来</span></div>
     </section>}
+    {!session && <section className="quick-music-actions" aria-label="快捷生成音乐">
+      <button type="button" className="quick-music-card quick-music-card--relax" onClick={() => void startQuickMusic("relax")} disabled={creating}>
+        <span className="quick-music-icon" aria-hidden="true">😴</span><span><strong>放松一下</strong><small>我想静静，别问我静静是谁</small></span>
+      </button>
+      <button type="button" className="quick-music-card quick-music-card--move" onClick={() => void startQuickMusic("move")} disabled={creating}>
+        <span className="quick-music-icon" aria-hidden="true">🏃</span><span><strong>动起来！</strong><small>一阵强劲的音乐响起</small></span>
+      </button>
+    </section>}
 
     {session && <>
       {job?.status === "succeeded" && <GenerationCard job={job} onSave={saveJob} onBack={returnToWriting} saving={saving} />}
       <div key={session.id} className={`home-writing ${sessionTransitioning ? "home-writing--exit" : "home-writing--enter"}`}>
         <section className="agent-panel" aria-label={`${user.agentName} 的当前回复`}>
-          <div className="agent-avatar" aria-hidden="true"><span>♫</span><i /></div>
+          <div className="agent-avatar" aria-hidden="true"><span>{agentAvatar}</span></div>
           <div className="agent-bubble">
             <div className="agent-bubble-content" aria-live="polite" aria-atomic="true">
               {sending ? <div className="agent-thinking" role="status"><span className="typing-dots" aria-hidden="true"><i /><i /><i /></span><span>正在倾听…</span></div> : latestAgentMessage ? <AnimatedAgentMessage content={latestAgentMessage.content} /> : <div className="agent-message"><p>你好呀，有什么想和我说的！</p></div>}
@@ -240,7 +279,7 @@ export function HomeApp() {
         <section className="paper-card">
           <div className="paper-meta"><span>{formatDate(session.createdAt)}</span></div>
           <div className="paper-time">{formatTime(new Date().toISOString())}</div>
-          <div className="paper-lines"><p className={!draftText(session.draft) ? "paper-placeholder" : ""}>{draftText(session.draft) || "你的日记会从这里慢慢长出来…"}</p></div>
+          <div className="paper-lines"><p className={!draftText(session.draft) ? "paper-placeholder" : ""}>{draftText(session.draft) || "写下你的故事…"}</p></div>
         </section>
         <div className="home-session-footer">
           {job?.status === "failed" && <section className="generation-failed" role="alert"><div><strong>这次生成没有完成</strong><p>{job.errorMessage || "服务暂时没有接住这段故事。"}</p></div><button className="button button-ghost" onClick={() => void startGeneration(session.id)}>再试一次</button></section>}

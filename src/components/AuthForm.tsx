@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
 import { apiFetch } from "@/lib/client";
 import { useAuth } from "./AuthContext";
+import { resetHomeCache } from "./HomeApp";
 
 export function AuthForm({ mode }: { mode: "login" | "register" }) {
   return <Suspense fallback={<main className="auth-page"><div className="loading-panel">正在准备 Meloday…</div></main>}><AuthFormContent mode={mode} /></Suspense>;
@@ -12,7 +13,6 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
 
 function AuthFormContent({ mode }: { mode: "login" | "register" }) {
   const router = useRouter();
-  const params = useSearchParams();
   const { refresh } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -31,7 +31,8 @@ function AuthFormContent({ mode }: { mode: "login" | "register" }) {
     try {
       await apiFetch(`/api/auth/${mode}`, { method: "POST", body: JSON.stringify({ username, password, ...(isRegister ? { confirmPassword } : {}) }) });
       await refresh();
-      router.replace(params.get("next") || "/");
+      resetHomeCache();
+      router.replace("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "暂时无法完成操作。");
     } finally { setBusy(false); }

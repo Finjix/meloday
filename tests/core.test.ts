@@ -195,6 +195,7 @@ test("API flow covers auth, three-turn organization, generation, save, publish a
   const logoutRoute = await import("../src/app/api/auth/logout/route");
   const meRoute = await import("../src/app/api/me/route");
   const sessionsRoute = await import("../src/app/api/sessions/route");
+  const quickMusicRoute = await import("../src/app/api/quick-music/route");
   const sessionRoute = await import("../src/app/api/sessions/[id]/route");
   const messagesRoute = await import("../src/app/api/sessions/[id]/messages/route");
   const sessionGenerationRoute = await import("../src/app/api/sessions/[id]/generate/route");
@@ -230,6 +231,11 @@ test("API flow covers auth, three-turn organization, generation, save, publish a
   const cookie = getCookie(loggedIn);
   assert.ok(cookie);
   assert.equal((await read(await meRoute.GET(jsonRequest("/api/me", "GET", undefined, cookie)))).data.user.username, "apiuser");
+
+  const quickMusic = (await read(await quickMusicRoute.POST(jsonRequest("/api/quick-music", "POST", { preset: "relax" }, cookie)))).data;
+  assert.equal(quickMusic.session.state.musicDirection.tempo, "慢速");
+  assert.equal(quickMusic.job.musicDirection.mood, "宁静、放松、治愈");
+  assert.equal((await quickMusicRoute.POST(jsonRequest("/api/quick-music", "POST", { preset: "invalid" }, cookie))).status, 400);
 
   const createdSessionResponse = await sessionsRoute.POST(jsonRequest("/api/sessions", "POST", {}, cookie));
   const createdSession = (await read(createdSessionResponse)).data;
