@@ -97,6 +97,10 @@ export function HomeApp() {
   useEffect(() => { resizeTextarea(); }, [input, resizeTextarea]);
 
   useEffect(() => {
+    if (job?.status === "succeeded") setGenerationCardOpen(true);
+  }, [job?.id, job?.status]);
+
+  useEffect(() => {
     const restored = restoreHomeState();
     if (!restored) {
       if (!cachedSession) {

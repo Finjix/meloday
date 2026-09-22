@@ -347,8 +347,11 @@ export function canReadMedia(id: string, userId: string | null): boolean {
     WHERE m.id = ? AND (
       m.owner_user_id = ?
       OR EXISTS (
-        SELECT 1 FROM diary_entries d JOIN community_posts p ON p.entry_id = d.id
-        WHERE d.audio_asset_id = m.id OR d.cover_asset_id = m.id
+        SELECT 1
+        FROM diary_entries d
+        JOIN community_posts p ON p.entry_id = d.id
+        JOIN users u ON u.id = p.user_id
+        WHERE d.audio_asset_id = m.id OR d.cover_asset_id = m.id OR u.avatar_asset_id = m.id
       )
     ) LIMIT 1
   `).get(id, userId ?? "") as { allowed: number } | undefined;

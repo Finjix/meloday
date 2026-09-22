@@ -276,6 +276,21 @@ export async function finalizeDiary(input: { draftText: string; state: AgentStat
 type GeneratedFile = { buffer: Buffer; mimeType: string; extension: string };
 const MAX_PROVIDER_DOWNLOAD_BYTES = 25 * 1024 * 1024;
 
+type ImageMimeType = "image/jpeg" | "image/png" | "image/webp";
+
+function imageMimeType(buffer: Buffer): ImageMimeType | null {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "image/jpeg";
+  if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
+  if (buffer.length >= 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP") return "image/webp";
+  return null;
+}
+
+function imageFile(buffer: Buffer): GeneratedFile {
+  const mimeType = imageMimeType(buffer);
+  if (!mimeType) throw new ProviderError("seedream", 502, "封面服务返回的图片格式不正确。");
+  return { buffer, mimeType, extension: mimeType === "image/jpeg" ? "jpg" : mimeType === "image/png" ? "png" : "webp" };
+}
+
 export function assertSafeProviderDownloadUrl(value: string): URL {
   let url: URL;
   try {
@@ -323,10 +338,14 @@ export function decodeHexAudio(value: string): Buffer {
 }
 
 export function decodeBase64Image(value: string): Buffer {
-  const encoded = value.trim();
-  if (!encoded || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded) || encoded.length % 4 !== 0) throw new ProviderError("seedream", 502, "封面服务返回的图片格式不正确。");
+  const trimmed = value.trim();
+  const dataUrlPayload = trimmed.match(/^data:image\/(?:jpeg|jpg|png|webp);base64,(.*)$/is)?.[1];
+  const raw = (dataUrlPayload ?? trimmed).replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+  const unpadded = raw.replace(/=+$/, "");
+  if (!unpadded || !/^[A-Za-z0-9+/]+$/.test(unpadded) || unpadded.length % 4 === 1) throw new ProviderError("seedream", 502, "封面服务返回的图片格式不正确。");
+  const encoded = `${unpadded}${"=".repeat((4 - (unpadded.length % 4)) % 4)}`;
   const buffer = Buffer.from(encoded, "base64");
-  if (buffer.length < 3 || buffer[0] !== 0xff || buffer[1] !== 0xd8 || buffer[2] !== 0xff) throw new ProviderError("seedream", 502, "封面服务返回的图片格式不正确。");
+  if (!imageMimeType(buffer)) throw new ProviderError("seedream", 502, "封面服务返回的图片格式不正确。");
   return buffer;
 }
 
@@ -388,13 +407,15 @@ export async function generateCover(card: { title: string; summary: string; body
       body: JSON.stringify({ model: config.imageModel, prompt: `温暖、清新、治愈的音乐日记封面。${card.title}。${card.summary}。画面为柔和纸张质感、轻微手绘插画感、留白充足的方形构图，不出现可读文字，不出现人物肖像。音乐氛围：${card.direction.mood}、${card.direction.style}。`, size: "2048x2048", output_format: "jpeg", response_format: "b64_json", sequential_image_generation: "disabled", watermark: true }),
       signal: controller.signal,
     });
-    const payload = await response.json().catch(() => null) as { data?: Array<{ b64_json?: string; url?: string }>; error?: { message?: unknown }; base_resp?: { status_msg?: unknown }; message?: unknown } | null;
+    const payload = await response.json().catch(() => null) as { data?: Array<{ b64_json?: unknown; url?: unknown }>; error?: { message?: unknown }; base_resp?: { status_msg?: unknown }; message?: unknown } | null;
     if (!response.ok) throw new ProviderError("seedream", response.status, tokenHubFailureMessage(payload, "封面服务", response.status));
     const item = payload?.data?.[0];
-    if (item?.b64_json) return { buffer: decodeBase64Image(item.b64_json), mimeType: "image/jpeg", extension: "jpg" };
-    if (item?.url) {
-      const downloaded = await readProviderDownload(item.url, controller.signal, ["image/jpeg"], "seedream", "封面下载失败。");
-      return { buffer: downloaded.buffer, mimeType: "image/jpeg", extension: "jpg" };
+    const encodedImage = safeText(item?.b64_json);
+    if (encodedImage) return imageFile(decodeBase64Image(encodedImage));
+    const imageUrl = safeText(item?.url);
+    if (imageUrl) {
+      const downloaded = await readProviderDownload(imageUrl, controller.signal, ["image/jpeg", "image/png", "image/webp"], "seedream", "封面下载失败。");
+      return imageFile(downloaded.buffer);
     }
     throw new ProviderError("seedream", 502, "封面服务没有返回图片。");
   } catch (error) {

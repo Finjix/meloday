@@ -150,6 +150,9 @@ test("agent JSON, intent, state merge and provider decoders", async () => {
   assert.deepEqual(providers.decodeHexAudio("ff00"), Buffer.from([0xff, 0x00]));
   const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
   assert.deepEqual(providers.decodeBase64Image(jpeg.toString("base64")), jpeg);
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  assert.deepEqual(providers.decodeBase64Image(`data:image/png;base64,${png.toString("base64")}`), png);
+  assert.deepEqual(providers.decodeBase64Image(png.toString("base64").replace(/.{4}/g, "$&\n")), png);
   assert.throws(() => providers.decodeHexAudio("fg"), (error) => error instanceof providers.ProviderError);
   assert.throws(() => providers.decodeBase64Image("not base64?"), (error) => error instanceof providers.ProviderError);
   assert.throws(() => providers.assertSafeProviderDownloadUrl("http://127.0.0.1/internal"), (error) => error instanceof providers.ProviderError);
@@ -174,6 +177,9 @@ test("capacity, saved-generation retention and media privacy", async () => {
   const user = repositories.createUser({ username: "owner", displayName: "Owner", passwordHash: await auth.hashPassword("owner password") });
   const other = repositories.createUser({ username: "other", displayName: "Other", passwordHash: await auth.hashPassword("other password") });
   database.getDb().prepare("UPDATE users SET diary_limit = 1 WHERE id = ?").run(user.id);
+  const avatarBuffer = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlE1jUAAAAASUVORK5CYII=", "base64");
+  const avatarAssetId = await media.writeMedia("avatar", user.id, avatarBuffer, "image/png", "png");
+  repositories.updateUserProfile(user.id, { avatarAssetId });
 
   const sessionId = repositories.createActiveSession({ userId: user.id, expiresAt: new Date(Date.now() + 86400000).toISOString() });
   const audioBuffer = Buffer.from("ID3audio");
@@ -192,10 +198,13 @@ test("capacity, saved-generation retention and media privacy", async () => {
   assert.equal(repositories.getDiaryEntry(saved.id, other.id), null);
   await assert.rejects(() => media.readMediaForUser(audioAssetId, other.id), (error) => assertHttpError(error, "MEDIA_NOT_FOUND"));
   await assert.rejects(() => media.readMediaForUser(audioAssetId, null), (error) => assertHttpError(error, "MEDIA_NOT_FOUND"));
+  await assert.rejects(() => media.readMediaForUser(avatarAssetId, null), (error) => assertHttpError(error, "MEDIA_NOT_FOUND"));
 
   repositories.publishDiaryEntry(saved.id, user.id);
   const publicMedia = await media.readMediaForUser(audioAssetId, null);
   assert.deepEqual(publicMedia.buffer, audioBuffer);
+  const publicAvatar = await media.readMediaForUser(avatarAssetId, null);
+  assert.deepEqual(publicAvatar.buffer, avatarBuffer);
 
   const secondSession = repositories.createActiveSession({ userId: user.id, expiresAt: new Date(Date.now() + 86400000).toISOString() });
   const secondJob = repositories.createGenerationJob({ sessionId: secondSession, userId: user.id, musicDirection: types.DEFAULT_AGENT_STATE.musicDirection });
