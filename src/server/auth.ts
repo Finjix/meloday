@@ -93,7 +93,18 @@ export function clearSessionCookieOnResponse(response: Response): void {
 export function assertSameOrigin(request: Request): void {
   const origin = request.headers.get("origin");
   if (!origin) return;
-  const requestOrigin = new URL(request.url).origin;
+
+  let requestOrigin: string;
+  try {
+    // When the app is behind Nginx, request.url can contain the internal
+    // Node address rather than the public host that the browser used.
+    const protocol = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || new URL(request.url).protocol.replace(":", "");
+    const host = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || request.headers.get("host")?.trim();
+    requestOrigin = host ? new URL(`${protocol}://${host}`).origin : new URL(request.url).origin;
+  } catch {
+    throw new HttpError(403, "BAD_ORIGIN", "请求来源不受信任。");
+  }
+
   if (origin !== requestOrigin) throw new HttpError(403, "BAD_ORIGIN", "请求来源不受信任。");
 }
 

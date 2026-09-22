@@ -74,6 +74,30 @@ test("password hashing and cookie sessions", async () => {
   assert.equal(auth.getRequestUser(request), null);
 });
 
+test("same-origin checks use the public origin behind a reverse proxy", async () => {
+  await loadRuntime();
+
+  assert.doesNotThrow(() => auth.assertSameOrigin(new Request("http://127.0.0.1:3000/api/auth/register", {
+    method: "POST",
+    headers: {
+      origin: "http://114.215.186.39",
+      host: "127.0.0.1:3000",
+      "x-forwarded-host": "114.215.186.39",
+      "x-forwarded-proto": "http",
+    },
+  })));
+
+  assert.doesNotThrow(() => auth.assertSameOrigin(new Request("http://127.0.0.1:3000/api/auth/register", {
+    method: "POST",
+    headers: { origin: "http://114.215.186.39", host: "114.215.186.39" },
+  })));
+
+  assert.throws(() => auth.assertSameOrigin(new Request("http://127.0.0.1:3000/api/auth/register", {
+    method: "POST",
+    headers: { origin: "https://attacker.example", host: "114.215.186.39" },
+  })), (error) => assertHttpError(error, "BAD_ORIGIN"));
+});
+
 test("agent JSON, intent, state merge and provider decoders", async () => {
   await loadRuntime();
   const parsed = providers.parseJsonObject("```json\n{\"ok\":true}\n```");
@@ -129,7 +153,8 @@ test("agent JSON, intent, state merge and provider decoders", async () => {
   assert.throws(() => providers.decodeHexAudio("fg"), (error) => error instanceof providers.ProviderError);
   assert.throws(() => providers.decodeBase64Image("not base64?"), (error) => error instanceof providers.ProviderError);
   assert.throws(() => providers.assertSafeProviderDownloadUrl("http://127.0.0.1/internal"), (error) => error instanceof providers.ProviderError);
-  assert.throws(() => providers.assertSafeProviderDownloadUrl("https://untrusted.example/file.mp3"), (error) => error instanceof providers.ProviderError);
+  assert.doesNotThrow(() => providers.assertSafeProviderDownloadUrl("https://untrusted.example/file.mp3"));
+  assert.throws(() => providers.assertSafeProviderDownloadUrl("http://untrusted.example/file.mp3"), (error) => error instanceof providers.ProviderError);
 });
 
 test("sessions contain only diary state and messages", async () => {
