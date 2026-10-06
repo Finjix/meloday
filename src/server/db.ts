@@ -148,6 +148,40 @@ const migrations: Array<{ version: number; sql: string }> = [
       CREATE INDEX IF NOT EXISTS idx_diary_checkins_user_date ON diary_checkins(user_id, checkin_date DESC);
     `,
   },
+  {
+    version: 6,
+    sql: `
+      ALTER TABLE active_sessions ADD COLUMN photo_asset_id TEXT REFERENCES media_assets(id);
+      ALTER TABLE diary_entries ADD COLUMN photo_asset_id TEXT REFERENCES media_assets(id);
+      CREATE TABLE diary_revisions (
+        id TEXT PRIMARY KEY,
+        entry_id TEXT NOT NULL REFERENCES diary_entries(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        body TEXT NOT NULL,
+        music_direction_json TEXT NOT NULL,
+        audio_asset_id TEXT REFERENCES media_assets(id),
+        cover_asset_id TEXT REFERENCES media_assets(id),
+        photo_asset_id TEXT REFERENCES media_assets(id),
+        reason TEXT NOT NULL CHECK (reason IN ('edit', 'music', 'cover', 'restore')),
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_diary_revisions_entry ON diary_revisions(entry_id, created_at DESC);
+      CREATE TABLE diary_regeneration_jobs (
+        id TEXT PRIMARY KEY,
+        entry_id TEXT NOT NULL REFERENCES diary_entries(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL CHECK (kind IN ('music', 'cover')),
+        status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed')),
+        feedback TEXT NOT NULL DEFAULT '',
+        asset_id TEXT REFERENCES media_assets(id),
+        error_message TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_diary_regeneration_entry ON diary_regeneration_jobs(entry_id, created_at DESC);
+    `,
+  },
 ];
 
 function createDb(): Database.Database {
@@ -174,6 +208,7 @@ function createDb(): Database.Database {
   const now = new Date().toISOString();
   database.prepare("UPDATE generation_jobs SET status = 'failed', audio_asset_id = NULL, cover_asset_id = NULL, error_message = '服务重启后任务已结束，请重新生成。', updated_at = ? WHERE status IN ('queued', 'running')").run(now);
   database.prepare("UPDATE active_sessions SET status = 'active', last_activity_at = ?, expires_at = ? WHERE status = 'generating'").run(now, expiresAtIso());
+  database.prepare("UPDATE diary_regeneration_jobs SET status = 'failed', asset_id = NULL, error_message = '服务重启后任务已结束，请重试。', updated_at = ? WHERE status IN ('queued', 'running')").run(now);
 
   return database;
 }

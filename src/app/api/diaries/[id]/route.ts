@@ -1,6 +1,6 @@
-import { apiError, ok } from "@/server/errors";
+import { apiError, HttpError, ok, requireJsonObject } from "@/server/errors";
 import { assertSameOrigin, requireRequestUser } from "@/server/auth";
-import { deleteDiaryEntry, getDiaryEntry } from "@/server/repositories";
+import { deleteDiaryEntry, editDiaryEntry, getDiaryEntry } from "@/server/repositories";
 import { removeOrphanedMedia } from "@/server/media";
 
 export const runtime = "nodejs";
@@ -30,4 +30,22 @@ export async function DELETE(request: Request, context: RouteContext) {
   } catch (error) {
     return apiError(error);
   }
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  try {
+    assertSameOrigin(request);
+    const user = requireRequestUser(request);
+    const { id } = await context.params;
+    const body = requireJsonObject(await request.json());
+    const title = body.title;
+    const summary = body.summary;
+    const text = body.body;
+    if (typeof title !== "string" || !title.trim() || title.trim().length > 100 ||
+        typeof summary !== "string" || summary.trim().length > 300 ||
+        typeof text !== "string" || !text.trim() || text.trim().length > 10000) {
+      throw new HttpError(400, "INVALID_DIARY", "标题、摘要或正文不符合长度要求。");
+    }
+    return ok(editDiaryEntry(id, user.id, { title: title.trim(), summary: summary.trim(), body: text.trim() }));
+  } catch (error) { return apiError(error); }
 }

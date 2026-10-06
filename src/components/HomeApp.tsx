@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { apiFetch, cacheHomeInput, cacheHomeState, formatDate, formatTime, restoreHomeState } from "@/lib/client";
+import Image from "next/image";
+import { apiFetch, cacheHomeInput, cacheHomeState, formatDate, formatTime, mediaUrl, restoreHomeState } from "@/lib/client";
 import { draftText, type GenerationJob, type SessionSnapshot } from "@/lib/types";
 import { useAuth } from "./AuthContext";
 import { AnimatedAgentMessage } from "./AnimatedAgentMessage";
@@ -29,13 +30,15 @@ export function resetHomeCache(): void {
   cacheHomeState(null, null);
 }
 
-const agentAvatars = ["🌿", "🌙", "🐼", "🦊", "🌻", "🐳", "🍀", "🦋", "🌈", "🐣"];
-
-function agentAvatarForSession(sessionId: string): string {
-  let hash = 0;
-  for (const character of sessionId) hash = (hash * 31 + character.charCodeAt(0)) | 0;
-  return agentAvatars[(hash >>> 0) % agentAvatars.length];
-}
+type SpeechRecognitionLike = {
+  lang: string;
+  interimResults: boolean;
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
 
 export function HomeApp() {
   const { user, refresh } = useAuth();
@@ -43,6 +46,9 @@ export function HomeApp() {
   const [session, setSessionState] = useState<SessionSnapshot | null>(cachedSession);
   const [job, setJobState] = useState<GenerationJob | null>(cachedJob);
   const [input, setInputState] = useState(cachedInput);
+  const [quickLine, setQuickLine] = useState("");
+  const [quickPhoto, setQuickPhoto] = useState<File | null>(null);
+  const [listening, setListening] = useState<"quick" | "composer" | null>(null);
   const [creating, setCreating] = useState(false);
   const [sessionTransitioning, setSessionTransitioning] = useState(false);
   const [sending, setSending] = useState(false);
@@ -53,6 +59,8 @@ export function HomeApp() {
   const [retryAgentContent, setRetryAgentContent] = useState<string | null>(null);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const generationInFlight = Boolean(job && (job.status === "queued" || job.status === "running"));
 
   const setSession = (next: SessionSnapshot | null) => {
@@ -96,6 +104,27 @@ export function HomeApp() {
   }, []);
 
   useEffect(() => { resizeTextarea(); }, [input, resizeTextarea]);
+  useEffect(() => () => recognitionRef.current?.stop(), []);
+
+  const dictate = (target: "quick" | "composer") => {
+    if (listening) { recognitionRef.current?.stop(); return; }
+    const speechWindow = window as Window & { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike };
+    const Constructor = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+    if (!Constructor) { setNotice("当前浏览器暂不支持语音转文字，可以直接输入，或换用支持语音识别的浏览器。"); return; }
+    const recognition = new Constructor();
+    recognition.lang = "zh-CN";
+    recognition.interimResults = false;
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results).map((result) => result[0]?.transcript ?? "").join(" ").trim();
+      if (target === "quick") setQuickLine((current) => [current, transcript].filter(Boolean).join(" "));
+      else setInput([cachedInput, transcript].filter(Boolean).join(" "));
+    };
+    recognition.onerror = () => setNotice("没有听清这次录音，请检查麦克风权限后重试。");
+    recognition.onend = () => { setListening(null); recognitionRef.current = null; };
+    recognitionRef.current = recognition;
+    try { recognition.start(); setListening(target); setNotice(""); }
+    catch { setListening(null); setNotice("语音识别暂时无法启动，请检查麦克风权限。"); }
+  };
 
   useEffect(() => {
     if (job?.status === "succeeded") setGenerationCardOpen(true);
@@ -166,6 +195,44 @@ export function HomeApp() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const startFromLine = async (mode: "generate" | "chat") => {
+    const seed = quickLine.trim();
+    if (!seed || creating) return;
+    setCreating(true); setNotice(""); setJob(null);
+    try {
+      let next = await apiFetch<SessionSnapshot>("/api/sessions", { method: "POST", body: JSON.stringify({ seed }) });
+      setSession(next);
+      setQuickLine("");
+      if (quickPhoto) {
+        const form = new FormData(); form.set("photo", quickPhoto);
+        try {
+          next = await apiFetch<SessionSnapshot>(`/api/sessions/${next.id}/photo`, { method: "POST", body: form });
+          setSession(next); setQuickPhoto(null);
+        } catch (error) {
+          setNotice(error instanceof Error ? `${error.message} 请先重新添加照片，再开始生成。` : "照片上传失败，请重试。");
+          return;
+        }
+      }
+      if (mode === "generate") await startGeneration(next.id);
+    } catch (error) { setNotice(error instanceof Error ? error.message : "暂时无法开始记录。"); }
+    finally { setCreating(false); }
+  };
+
+  const uploadSessionPhoto = async (file: File) => {
+    if (!session) return;
+    const form = new FormData(); form.set("photo", file);
+    setNotice("");
+    try { setSession(await apiFetch<SessionSnapshot>(`/api/sessions/${session.id}/photo`, { method: "POST", body: form })); }
+    catch (error) { setNotice(error instanceof Error ? error.message : "照片上传失败。"); }
+    finally { if (photoInputRef.current) photoInputRef.current.value = ""; }
+  };
+
+  const removeSessionPhoto = async () => {
+    if (!session) return;
+    try { setSession(await apiFetch<SessionSnapshot>(`/api/sessions/${session.id}/photo`, { method: "DELETE" })); }
+    catch (error) { setNotice(error instanceof Error ? error.message : "照片移除失败。"); }
   };
 
   const sendMessage = async (contentToRetry?: string) => {
@@ -250,7 +317,6 @@ export function HomeApp() {
   if (!user) return null;
 
   const latestAgentMessage = session ? [...session.messages].reverse().find((message) => message.role === "agent") : undefined;
-  const agentAvatar = session ? agentAvatarForSession(session.id) : agentAvatars[0];
   const generating = generationInFlight;
   const generationReady = job?.status === "succeeded";
   const noticeView = notice && <div className="notice home-notice" role="status">{notice}</div>;
@@ -277,11 +343,22 @@ export function HomeApp() {
       </button>
     </section>}
 
+    {!session && <section className="quick-entry-panel" aria-label="一句话记下今天">
+      <span className="eyebrow">也可以从一句话开始</span><h2>先写下此刻</h2>
+      <textarea value={quickLine} maxLength={5000} rows={3} onChange={(event) => setQuickLine(event.target.value)} placeholder="今天有什么值得留住的瞬间？" />
+      <div className="quick-entry-tools">
+        <button className="button button-ghost" type="button" onClick={() => dictate("quick")} aria-pressed={listening === "quick"}>{listening === "quick" ? "停止聆听" : "语音输入"}</button>
+        <label className="button button-ghost" htmlFor="quick-photo-input">{quickPhoto ? `已选：${quickPhoto.name}` : "附一张照片"}</label>
+        <input id="quick-photo-input" type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => setQuickPhoto(event.target.files?.[0] ?? null)} />
+      </div>
+      <div className="quick-entry-choices"><button className="button button-primary" disabled={creating || !quickLine.trim()} onClick={() => void startFromLine("generate")}>直接生成</button><button className="button button-ghost" disabled={creating || !quickLine.trim()} onClick={() => void startFromLine("chat")}>继续聊聊</button></div>
+    </section>}
+
     {session && <>
       {generationReady && generationCardOpen && <GenerationCard job={job} onSave={saveJob} onBack={returnToWriting} saving={saving} />}
       <div key={session.id} className={`home-writing ${sessionTransitioning ? "home-writing--exit" : "home-writing--enter"}`}>
         <section className="agent-panel" aria-label={`${user.agentName} 的当前回复`}>
-          <div className="agent-avatar" aria-hidden="true"><span>{agentAvatar}</span></div>
+          <div className="agent-avatar" aria-hidden="true"><Image src="/meloday-companion-v2.webp" alt="" width={51} height={51} unoptimized /></div>
           <div className="agent-bubble">
             <div className="agent-bubble-content" aria-live="polite" aria-atomic="true">
               {sending ? <div className="agent-thinking" role="status"><span className="typing-dots" aria-hidden="true"><i /><i /><i /></span><span>正在倾听…</span></div> : agentReplyError ? <div className="agent-reply-error" role="alert"><span>{agentReplyError}</span>{retryAgentContent && <button type="button" onClick={() => void sendMessage(retryAgentContent)}>重试</button>}</div> : latestAgentMessage ? <AnimatedAgentMessage key={latestAgentMessage.id} messageId={latestAgentMessage.id} content={latestAgentMessage.content} /> : <div className="agent-message"><p>你好呀，有什么想和我说的！</p></div>}
@@ -292,6 +369,7 @@ export function HomeApp() {
           <div className="paper-meta"><span>{formatDate(session.createdAt)}</span></div>
           <div className="paper-time">{formatTime(new Date().toISOString())}</div>
           <div className="paper-lines"><p className={!draftText(session.draft) ? "paper-placeholder" : ""}>{draftText(session.draft) || "写下你的故事…"}</p></div>
+          {session.photoAssetId && <div className="paper-photo"><Image src={mediaUrl(session.photoAssetId)!} alt="今天的照片" width={180} height={135} unoptimized /><button type="button" onClick={() => void removeSessionPhoto()} aria-label="移除照片">×</button></div>}
         </section>
         <div className="home-session-footer">
           {job?.status === "failed" && <section className="generation-failed" role="alert"><div><strong>这次生成没有完成</strong><p>{job.errorMessage || "服务暂时没有接住这段故事。"}</p></div><button className="button button-ghost" onClick={() => void startGeneration(session.id)}>再试一次</button></section>}
@@ -300,8 +378,11 @@ export function HomeApp() {
             <div className="composer-input">
               <textarea ref={textareaRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} placeholder="写下此刻想说的话…" rows={1} disabled={sending || generating || session.status !== "active"} />
               <div className="composer-actions">
-                <button type="button" className="new-diary-button" onClick={() => void startSession()} disabled={creating || sending || generating} aria-label="新开日记" title="新开日记">+</button>
-                <button type="submit" className="send-button" disabled={!input.trim() || sending || generating} aria-label="发送">↗</button>
+                <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadSessionPhoto(file); }} />
+                <button type="button" className="composer-tool-button" onClick={() => photoInputRef.current?.click()} disabled={creating || sending || generating} title="添加照片"><AppIcon name="photo" /><span>照片</span></button>
+                <button type="button" className="composer-tool-button" onClick={() => dictate("composer")} disabled={creating || sending || generating} aria-pressed={listening === "composer"} title="语音转文字"><AppIcon name="mic" /><span>{listening === "composer" ? "停止" : "语音"}</span></button>
+                <button type="button" className="composer-tool-button" onClick={() => void startSession()} disabled={creating || sending || generating} title="新开日记"><AppIcon name="newDiary" /><span>新日记</span></button>
+                <button type="submit" className="composer-send-button" disabled={!input.trim() || sending || generating} title="发送消息"><AppIcon name="send" /><span>发送</span></button>
               </div>
             </div>
           </form>

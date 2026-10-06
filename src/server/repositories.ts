@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getDb } from "./db";
 import { expiresAtIso } from "./config";
 import { HttpError } from "./errors";
-import { DEFAULT_AGENT_STATE, type AgentState, type ChatMessage, type DiaryDraft, type DiaryEntry, type GenerationJob, type GenerationStage, type GenerationStatus, type MusicDirection, type SessionStatus, type User, type CommunityItem, type SharedDiaryEntry, type DiaryCheckinStatus } from "@/lib/types";
+import { DEFAULT_AGENT_STATE, type AgentState, type ChatMessage, type DiaryDraft, type DiaryEntry, type DiaryRevision, type DiaryRegeneration, type GenerationJob, type GenerationStage, type GenerationStatus, type MusicDirection, type SessionStatus, type User, type CommunityItem, type SharedDiaryEntry, type DiaryCheckinStatus } from "@/lib/types";
 
 type UserRow = {
   id: string;
@@ -26,6 +26,7 @@ type ActiveSessionRow = {
   created_at: string;
   last_activity_at: string;
   expires_at: string;
+  photo_asset_id: string | null;
 };
 
 type GenerationRow = {
@@ -51,6 +52,7 @@ type DiaryRow = GenerationRow & {
   entry_id: string;
   generation_id: string;
   published_at: string | null;
+  photo_asset_id: string | null;
 };
 
 function parseJson<T>(value: string | null, fallback: T): T {
@@ -171,7 +173,7 @@ export function createActiveSession(input: { userId: string; expiresAt: string }
   return id;
 }
 
-export function mapSession(row: ActiveSessionRow): { id: string; userId: string; status: SessionStatus; state: AgentState; draft: DiaryDraft; createdAt: string; lastActivityAt: string; expiresAt: string } {
+export function mapSession(row: ActiveSessionRow): { id: string; userId: string; status: SessionStatus; state: AgentState; draft: DiaryDraft; createdAt: string; lastActivityAt: string; expiresAt: string; photoAssetId: string | null } {
   return {
     id: row.id,
     userId: row.user_id,
@@ -186,6 +188,7 @@ export function mapSession(row: ActiveSessionRow): { id: string; userId: string;
     createdAt: row.created_at,
     lastActivityAt: row.last_activity_at,
     expiresAt: row.expires_at,
+    photoAssetId: row.photo_asset_id,
   };
 }
 
@@ -204,6 +207,23 @@ export function touchActiveSession(id: string, input: { state: AgentState; draft
   getDb().prepare(
     "UPDATE active_sessions SET state_json = ?, stable_text = ?, recent_text = ?, user_turn_count = ?, turns_since_organization = ?, status = COALESCE(?, status), last_activity_at = ?, expires_at = ? WHERE id = ?",
   ).run(JSON.stringify(input.state), input.draft.stableText, input.draft.recentText, input.draft.userTurnCount, input.draft.turnsSinceOrganization, input.status ?? null, now, input.expiresAt, id);
+}
+
+export function setSessionPhoto(id: string, userId: string, assetId: string | null): boolean {
+  return getDb().prepare("UPDATE active_sessions SET photo_asset_id = ?, last_activity_at = ? WHERE id = ? AND user_id = ? AND status = 'active'").run(assetId, new Date().toISOString(), id, userId).changes > 0;
+}
+
+export function setDiaryPhoto(id: string, userId: string, assetId: string | null): DiaryEntry {
+  const db = getDb();
+  db.transaction(() => {
+    const entry = getDiaryEntry(id, userId);
+    if (!entry) throw new HttpError(404, "DIARY_NOT_FOUND", "找不到这一页。");
+    if (entry.photoAssetId === assetId) return;
+    snapshotDiaryRevision(entry, "edit");
+    db.prepare("UPDATE diary_entries SET photo_asset_id = ?, updated_at = ? WHERE id = ? AND user_id = ?")
+      .run(assetId, new Date().toISOString(), id, userId);
+  })();
+  return getDiaryEntry(id, userId)!;
 }
 
 export function addSessionMessage(sessionId: string, role: "user" | "agent", content: string): ChatMessage {
@@ -361,7 +381,7 @@ export function canReadMedia(id: string, userId: string | null): boolean {
 export function getDiaryEntries(userId: string): DiaryEntry[] {
   const rows = getDb().prepare(`
     SELECT d.id AS entry_id, d.generation_id, d.title, d.summary, d.body, d.music_direction_json,
-      d.audio_asset_id, d.cover_asset_id, d.created_at, d.updated_at, p.published_at,
+      d.audio_asset_id, d.cover_asset_id, d.photo_asset_id, d.created_at, d.updated_at, p.published_at,
       g.session_id, g.user_id, g.parent_generation_id, g.status, g.stage, g.feedback, g.error_message,
       g.created_at AS generation_created_at, g.updated_at AS generation_updated_at
     FROM diary_entries d
@@ -378,6 +398,7 @@ export function getDiaryEntries(userId: string): DiaryEntry[] {
     musicDirection: parseJson(row.music_direction_json, DEFAULT_AGENT_STATE.musicDirection),
     audioAssetId: row.audio_asset_id,
     coverAssetId: row.cover_asset_id,
+    photoAssetId: row.photo_asset_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     publishedAt: row.published_at,
@@ -387,7 +408,7 @@ export function getDiaryEntries(userId: string): DiaryEntry[] {
 export function getDiaryEntry(id: string, userId: string): DiaryEntry | null {
   const row = getDb().prepare(`
     SELECT d.id AS entry_id, d.generation_id, d.title, d.summary, d.body, d.music_direction_json,
-      d.audio_asset_id, d.cover_asset_id, d.created_at, d.updated_at, p.published_at,
+      d.audio_asset_id, d.cover_asset_id, d.photo_asset_id, d.created_at, d.updated_at, p.published_at,
       g.session_id, g.user_id, g.parent_generation_id, g.status, g.stage, g.feedback, g.error_message,
       g.created_at AS generation_created_at, g.updated_at AS generation_updated_at
     FROM diary_entries d LEFT JOIN community_posts p ON p.entry_id = d.id
@@ -404,6 +425,7 @@ export function getDiaryEntry(id: string, userId: string): DiaryEntry | null {
     musicDirection: parseJson(row.music_direction_json, DEFAULT_AGENT_STATE.musicDirection),
     audioAssetId: row.audio_asset_id,
     coverAssetId: row.cover_asset_id,
+    photoAssetId: row.photo_asset_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     publishedAt: row.published_at,
@@ -431,14 +453,15 @@ export function saveDiaryEntry(input: { userId: string; generationId: string; ti
     const used = db.prepare("SELECT COUNT(*) AS count FROM diary_entries WHERE user_id = ?").get(input.userId) as { count: number };
     if (!capacity || Number(used.count) >= capacity.diary_limit) throw new HttpError(409, "CAPACITY_REACHED", `日记容量已用满（${capacity?.diary_limit ?? 30} 篇）。请在“我的”页面购买扩容。`);
     entryId = randomUUID();
-    db.prepare("INSERT INTO diary_entries (id, user_id, generation_id, title, summary, body, music_direction_json, audio_asset_id, cover_asset_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(entryId, input.userId, input.generationId, input.title, input.summary, input.body, JSON.stringify(input.musicDirection), input.audioAssetId, input.coverAssetId, now, now);
+    const sessionPhoto = db.prepare("SELECT photo_asset_id FROM active_sessions WHERE id = ? AND user_id = ?").get(generation.session_id, input.userId) as { photo_asset_id: string | null };
+    db.prepare("INSERT INTO diary_entries (id, user_id, generation_id, title, summary, body, music_direction_json, audio_asset_id, cover_asset_id, photo_asset_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(entryId, input.userId, input.generationId, input.title, input.summary, input.body, JSON.stringify(input.musicDirection), input.audioAssetId, input.coverAssetId, sessionPhoto.photo_asset_id, now, now);
     const checkinDate = getCheckinDate();
     const checkin = db.prepare("INSERT INTO diary_checkins (user_id, checkin_date, entry_id, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, checkin_date) DO NOTHING").run(input.userId, checkinDate, entryId, now);
     if (checkin.changes && getDiaryCheckinStatus(input.userId).rewardReady) {
       db.prepare("INSERT INTO capacity_grants (id, user_id, amount, reason, created_at) VALUES (?, ?, ?, ?, ?)").run(randomUUID(), input.userId, 1, `diary-checkin:${checkinDate}`, now);
       db.prepare("UPDATE users SET diary_limit = diary_limit + 1 WHERE id = ?").run(input.userId);
     }
-    db.prepare("UPDATE active_sessions SET status = 'completed', state_json = ?, stable_text = '', recent_text = '', user_turn_count = 0, turns_since_organization = 0, expires_at = ? WHERE id = ? AND user_id = ?").run(JSON.stringify(DEFAULT_AGENT_STATE), now, generation.session_id, input.userId);
+    db.prepare("UPDATE active_sessions SET status = 'completed', state_json = ?, stable_text = '', recent_text = '', user_turn_count = 0, turns_since_organization = 0, photo_asset_id = NULL, expires_at = ? WHERE id = ? AND user_id = ?").run(JSON.stringify(DEFAULT_AGENT_STATE), now, generation.session_id, input.userId);
     db.prepare("DELETE FROM session_messages WHERE session_id = ?").run(generation.session_id);
   });
   transaction();
@@ -497,7 +520,10 @@ export function deleteOrphanedMedia(): Array<{ id: string; storagePath: string }
     SELECT m.id, m.storage_path AS storagePath FROM media_assets m
     WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_asset_id = m.id)
       AND NOT EXISTS (SELECT 1 FROM generation_jobs g WHERE g.audio_asset_id = m.id OR g.cover_asset_id = m.id)
-      AND NOT EXISTS (SELECT 1 FROM diary_entries d WHERE d.audio_asset_id = m.id OR d.cover_asset_id = m.id)
+      AND NOT EXISTS (SELECT 1 FROM active_sessions s WHERE s.photo_asset_id = m.id)
+      AND NOT EXISTS (SELECT 1 FROM diary_entries d WHERE d.audio_asset_id = m.id OR d.cover_asset_id = m.id OR d.photo_asset_id = m.id)
+      AND NOT EXISTS (SELECT 1 FROM diary_revisions r WHERE r.audio_asset_id = m.id OR r.cover_asset_id = m.id OR r.photo_asset_id = m.id)
+      AND NOT EXISTS (SELECT 1 FROM diary_regeneration_jobs j WHERE j.asset_id = m.id)
   `).all() as Array<{ id: string; storagePath: string }>;
   if (rows.length) getDb().prepare(`DELETE FROM media_assets WHERE id IN (${rows.map(() => "?").join(",")})`).run(...rows.map((row) => row.id));
   return rows;
@@ -505,5 +531,109 @@ export function deleteOrphanedMedia(): Array<{ id: string; storagePath: string }
 
 export function resetSchemaForTests(): void {
   const db = getDb();
-  db.exec("DELETE FROM community_posts; DELETE FROM diary_entries; DELETE FROM generation_jobs; DELETE FROM session_messages; DELETE FROM active_sessions; DELETE FROM auth_sessions; DELETE FROM media_assets; DELETE FROM capacity_grants; DELETE FROM users;");
+  db.exec("DELETE FROM diary_regeneration_jobs; DELETE FROM diary_revisions; DELETE FROM community_posts; DELETE FROM diary_entries; DELETE FROM generation_jobs; DELETE FROM session_messages; DELETE FROM active_sessions; DELETE FROM auth_sessions; DELETE FROM media_assets; DELETE FROM capacity_grants; DELETE FROM users;");
+}
+
+function snapshotDiaryRevision(entry: DiaryEntry, reason: DiaryRevision["reason"]): void {
+  getDb().prepare(`INSERT INTO diary_revisions
+    (id, entry_id, title, summary, body, music_direction_json, audio_asset_id, cover_asset_id, photo_asset_id, reason, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(randomUUID(), entry.id, entry.title, entry.summary, entry.body,
+    JSON.stringify(entry.musicDirection), entry.audioAssetId, entry.coverAssetId, entry.photoAssetId, reason, new Date().toISOString());
+}
+
+export function getDiaryRevisions(entryId: string, userId: string): DiaryRevision[] {
+  if (!getDiaryEntry(entryId, userId)) throw new HttpError(404, "DIARY_NOT_FOUND", "找不到这一页。");
+  const rows = getDb().prepare("SELECT * FROM diary_revisions WHERE entry_id = ? ORDER BY created_at DESC, rowid DESC").all(entryId) as Array<{
+    id: string; entry_id: string; title: string; summary: string; body: string; music_direction_json: string;
+    audio_asset_id: string | null; cover_asset_id: string | null; photo_asset_id: string | null;
+    reason: DiaryRevision["reason"]; created_at: string;
+  }>;
+  return rows.map((row) => ({ id: row.id, entryId: row.entry_id, title: row.title, summary: row.summary,
+    body: row.body, musicDirection: parseJson(row.music_direction_json, DEFAULT_AGENT_STATE.musicDirection),
+    audioAssetId: row.audio_asset_id, coverAssetId: row.cover_asset_id, photoAssetId: row.photo_asset_id,
+    reason: row.reason, createdAt: row.created_at }));
+}
+
+export function editDiaryEntry(id: string, userId: string, input: { title: string; summary: string; body: string }): DiaryEntry {
+  const db = getDb();
+  db.transaction(() => {
+    const entry = getDiaryEntry(id, userId);
+    if (!entry) throw new HttpError(404, "DIARY_NOT_FOUND", "找不到这一页。");
+    if (entry.title === input.title && entry.summary === input.summary && entry.body === input.body) return;
+    snapshotDiaryRevision(entry, "edit");
+    db.prepare("UPDATE diary_entries SET title = ?, summary = ?, body = ?, updated_at = ? WHERE id = ? AND user_id = ?")
+      .run(input.title, input.summary, input.body, new Date().toISOString(), id, userId);
+  })();
+  return getDiaryEntry(id, userId)!;
+}
+
+export function restoreDiaryRevision(id: string, userId: string, revisionId: string): DiaryEntry {
+  const db = getDb();
+  db.transaction(() => {
+    const entry = getDiaryEntry(id, userId);
+    if (!entry) throw new HttpError(404, "DIARY_NOT_FOUND", "找不到这一页。");
+    const revision = db.prepare("SELECT * FROM diary_revisions WHERE id = ? AND entry_id = ?").get(revisionId, id) as {
+      title: string; summary: string; body: string; music_direction_json: string; audio_asset_id: string | null;
+      cover_asset_id: string | null; photo_asset_id: string | null;
+    } | undefined;
+    if (!revision) throw new HttpError(404, "REVISION_NOT_FOUND", "找不到这个版本。");
+    snapshotDiaryRevision(entry, "restore");
+    db.prepare(`UPDATE diary_entries SET title = ?, summary = ?, body = ?, music_direction_json = ?,
+      audio_asset_id = ?, cover_asset_id = ?, photo_asset_id = ?, updated_at = ? WHERE id = ? AND user_id = ?`)
+      .run(revision.title, revision.summary, revision.body, revision.music_direction_json, revision.audio_asset_id,
+        revision.cover_asset_id, revision.photo_asset_id, new Date().toISOString(), id, userId);
+  })();
+  return getDiaryEntry(id, userId)!;
+}
+
+export function replaceDiaryAsset(id: string, userId: string, kind: "music" | "cover", assetId: string, expectedUpdatedAt: string): DiaryEntry {
+  const db = getDb();
+  db.transaction(() => {
+    const entry = getDiaryEntry(id, userId);
+    if (!entry) throw new HttpError(404, "DIARY_NOT_FOUND", "找不到这一页。");
+    if (entry.updatedAt !== expectedUpdatedAt) throw new HttpError(409, "DIARY_CHANGED", "这一页刚刚更新过，请重新生成。");
+    snapshotDiaryRevision(entry, kind);
+    const column = kind === "music" ? "audio_asset_id" : "cover_asset_id";
+    db.prepare(`UPDATE diary_entries SET ${column} = ?, updated_at = ? WHERE id = ? AND user_id = ?`)
+      .run(assetId, new Date().toISOString(), id, userId);
+  })();
+  return getDiaryEntry(id, userId)!;
+}
+
+export function createDiaryRegeneration(entryId: string, userId: string, kind: "music" | "cover", feedback: string): DiaryRegeneration {
+  const entry = getDiaryEntry(entryId, userId);
+  if (!entry) throw new HttpError(404, "DIARY_NOT_FOUND", "找不到这一页。");
+  const active = getDb().prepare("SELECT 1 FROM diary_regeneration_jobs WHERE entry_id = ? AND status IN ('queued', 'running')").get(entryId);
+  if (active) throw new HttpError(409, "REGENERATION_IN_PROGRESS", "这一页还有生成任务正在进行。");
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  getDb().prepare("INSERT INTO diary_regeneration_jobs (id, entry_id, user_id, kind, status, feedback, created_at, updated_at) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)")
+    .run(id, entryId, userId, kind, feedback, now, now);
+  return getDiaryRegeneration(id, userId)!;
+}
+
+export function getDiaryRegeneration(id: string, userId: string): DiaryRegeneration | null {
+  const row = getDb().prepare("SELECT * FROM diary_regeneration_jobs WHERE id = ? AND user_id = ?").get(id, userId) as {
+    id: string; entry_id: string; kind: "music" | "cover"; status: GenerationStatus;
+    error_message: string | null; created_at: string; updated_at: string;
+  } | undefined;
+  return row ? { id: row.id, entryId: row.entry_id, kind: row.kind, status: row.status,
+    errorMessage: row.error_message, createdAt: row.created_at, updatedAt: row.updated_at } : null;
+}
+
+export function getLatestDiaryRegeneration(entryId: string, userId: string): DiaryRegeneration | null {
+  if (!getDiaryEntry(entryId, userId)) throw new HttpError(404, "DIARY_NOT_FOUND", "找不到这一页。");
+  const row = getDb().prepare("SELECT id FROM diary_regeneration_jobs WHERE entry_id = ? AND user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1")
+    .get(entryId, userId) as { id: string } | undefined;
+  return row ? getDiaryRegeneration(row.id, userId) : null;
+}
+
+export function setDiaryRegenerationStatus(id: string, status: GenerationStatus, errorMessage: string | null = null): void {
+  getDb().prepare("UPDATE diary_regeneration_jobs SET status = ?, asset_id = CASE WHEN ? = 'failed' THEN NULL ELSE asset_id END, error_message = ?, updated_at = ? WHERE id = ?")
+    .run(status, status, errorMessage, new Date().toISOString(), id);
+}
+
+export function setDiaryRegenerationAsset(id: string, assetId: string): void {
+  getDb().prepare("UPDATE diary_regeneration_jobs SET asset_id = ?, updated_at = ? WHERE id = ?")
+    .run(assetId, new Date().toISOString(), id);
 }

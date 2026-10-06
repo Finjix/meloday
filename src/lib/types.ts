@@ -68,6 +68,7 @@ export type SessionSnapshot = {
   state: AgentState;
   draft: DiaryDraft;
   messages: ChatMessage[];
+  photoAssetId: string | null;
 };
 
 export type GenerationStatus = "queued" | "running" | "succeeded" | "failed";
@@ -100,6 +101,25 @@ export type DiaryEntry = DiaryCard & {
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;
+  photoAssetId: string | null;
+};
+
+export type DiaryRevision = DiaryCard & {
+  id: string;
+  entryId: string;
+  photoAssetId: string | null;
+  reason: "edit" | "music" | "cover" | "restore";
+  createdAt: string;
+};
+
+export type DiaryRegeneration = {
+  id: string;
+  entryId: string;
+  kind: "music" | "cover";
+  status: GenerationStatus;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type CommunityItem = {

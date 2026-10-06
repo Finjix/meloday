@@ -12,6 +12,16 @@ export function newSession(userId: string): SessionSnapshot {
   return getSessionSnapshot(id, userId)!;
 }
 
+export function newSeededSession(userId: string, content: string): SessionSnapshot {
+  const text = content.trim();
+  if (!text || text.length > 5000) throw new HttpError(400, "INVALID_SEED", "请写下 1 到 5000 字的今日片段。");
+  const session = newSession(userId);
+  addSessionMessage(session.id, "user", text);
+  addSessionMessage(session.id, "agent", "我记下了。如果还想多说一点，我会继续听；也可以直接把这一刻写成音乐日记。");
+  touchActiveSession(session.id, { state: DEFAULT_AGENT_STATE, draft: { ...EMPTY_DIARY_DRAFT, recentText: text, userTurnCount: 1 }, expiresAt: expiresAtIso() });
+  return getSessionSnapshot(session.id, userId)!;
+}
+
 export type QuickMusicPreset = "relax" | "move";
 
 type QuickMusicDetails = {
@@ -63,6 +73,7 @@ export function getSessionSnapshot(id: string, userId: string): SessionSnapshot 
     state: session.state,
     draft: session.draft,
     messages: getSessionMessages(id),
+    photoAssetId: session.photoAssetId,
   };
 }
 

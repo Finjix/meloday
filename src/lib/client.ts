@@ -46,7 +46,7 @@ export function restoreHomeState(): { session: SessionSnapshot; job: GenerationJ
 }
 
 export async function apiFetch<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
+  const response = await fetch(input, { ...init, headers: { ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...(init?.headers ?? {}) } });
   const payload = await response.json().catch(() => null) as { data?: T; error?: { code?: string; message?: string } } | null;
   if (!response.ok) throw new ApiClientError(payload?.error?.code ?? "REQUEST_FAILED", payload?.error?.message ?? "请求失败，请稍后再试。", response.status);
   return payload?.data as T;

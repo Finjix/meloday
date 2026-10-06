@@ -1,7 +1,7 @@
-import { apiError, ok } from "@/server/errors";
+import { apiError, ok, requireJsonObject } from "@/server/errors";
 import { requireRequestUser, assertSameOrigin } from "@/server/auth";
 import { getLatestActiveSession } from "@/server/repositories";
-import { getSessionSnapshot, newSession } from "@/server/session-service";
+import { getSessionSnapshot, newSeededSession, newSession } from "@/server/session-service";
 
 export const runtime = "nodejs";
 
@@ -19,7 +19,8 @@ export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
     const user = requireRequestUser(request);
-    return ok(newSession(user.id));
+    const body = requireJsonObject(await request.json().catch(() => ({})));
+    return ok(typeof body.seed === "string" ? newSeededSession(user.id, body.seed) : newSession(user.id));
   } catch (error) {
     return apiError(error);
   }

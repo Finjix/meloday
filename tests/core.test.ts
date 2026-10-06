@@ -168,7 +168,7 @@ test("sessions contain only diary state and messages", async () => {
   repositories.touchActiveSession(sessionId, { state: types.DEFAULT_AGENT_STATE, draft: types.EMPTY_DIARY_DRAFT, expiresAt: new Date(Date.now() + 86400000).toISOString() });
   const session = repositories.getActiveSession(sessionId, user.id);
   assert.ok(session);
-  assert.deepEqual(Object.keys(session).sort(), ["createdAt", "draft", "expiresAt", "id", "lastActivityAt", "state", "status", "userId"]);
+  assert.deepEqual(Object.keys(session).sort(), ["createdAt", "draft", "expiresAt", "id", "lastActivityAt", "photoAssetId", "state", "status", "userId"]);
 });
 
 test("capacity, saved-generation retention and media privacy", async () => {
@@ -241,6 +241,12 @@ test("API flow covers auth, generation, save, publish and isolation", async () =
   const saveRoute = await import("../src/app/api/generations/[id]/save/route");
   const regenerateRoute = await import("../src/app/api/generations/[id]/regenerate/route");
   const diaryRoute = await import("../src/app/api/diaries/[id]/route");
+  const diaryPhotoRoute = await import("../src/app/api/diaries/[id]/photo/route");
+  const sessionPhotoRoute = await import("../src/app/api/sessions/[id]/photo/route");
+  const diaryRevisionsRoute = await import("../src/app/api/diaries/[id]/revisions/route");
+  const restoreRoute = await import("../src/app/api/diaries/[id]/revisions/[revisionId]/restore/route");
+  const diaryRegenerateRoute = await import("../src/app/api/diaries/[id]/regenerate/route");
+  const diaryRegenerationRoute = await import("../src/app/api/diary-regenerations/[id]/route");
   const publishRoute = await import("../src/app/api/diaries/[id]/publish/route");
   const unpublishRoute = await import("../src/app/api/diaries/[id]/unpublish/route");
   const diariesRoute = await import("../src/app/api/diaries/route");
@@ -278,6 +284,22 @@ test("API flow covers auth, generation, save, publish and isolation", async () =
   const createdSessionResponse = await sessionsRoute.POST(jsonRequest("/api/sessions", "POST", {}, cookie));
   const createdSession = (await read(createdSessionResponse)).data;
   assert.ok(createdSession.id);
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlE1jUAAAAASUVORK5CYII=", "base64");
+  const photoForm = new FormData(); photoForm.set("photo", new File([png], "day.png", { type: "image/png" }));
+  const photoRequest = new Request(`http://localhost/api/sessions/${createdSession.id}/photo`, { method: "POST", headers: { cookie: `${auth.SESSION_COOKIE}=${cookie}` }, body: photoForm });
+  const sessionWithPhoto = (await read(await sessionPhotoRoute.POST(photoRequest, context(createdSession.id)))).data;
+  assert.ok(sessionWithPhoto.photoAssetId);
+  const privatePhotoId = sessionWithPhoto.photoAssetId as string;
+  const seeded = (await read(await sessionsRoute.POST(jsonRequest("/api/sessions", "POST", { seed: "窗外刚下过雨" }, cookie)))).data;
+  assert.equal(seeded.draft.recentText, "窗外刚下过雨");
+  assert.equal(seeded.draft.userTurnCount, 1);
+  const seededJob = (await read(await sessionGenerationRoute.POST(jsonRequest(`/api/sessions/${seeded.id}/generate`, "POST", {}, cookie), context(seeded.id)))).data;
+  let seededStatus = seededJob;
+  for (let attempt = 0; attempt < 80 && !["succeeded", "failed"].includes(seededStatus.status); attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    seededStatus = (await read(await generationRoute.GET(jsonRequest(`/api/generations/${seededJob.id}`, "GET", undefined, cookie), context(seededJob.id)))).data;
+  }
+  assert.equal(seededStatus.status, "succeeded", seededStatus.errorMessage ?? "one-line generation did not succeed");
   for (const content of ["早上去了河边", "风很轻，心情也慢慢安静下来", "我在长椅上听完了一首歌"])
     await messagesRoute.POST(jsonRequest(`/api/sessions/${createdSession.id}/messages`, "POST", { content }, cookie), context(createdSession.id));
   const organized = (await read(await sessionsRoute.GET(jsonRequest("/api/sessions", "GET", undefined, cookie)))).data;
@@ -305,14 +327,44 @@ test("API flow covers auth, generation, save, publish and isolation", async () =
   assert.equal((await read(await generationRoute.GET(jsonRequest(`/api/generations/${queuedJob.id}`, "GET", undefined, cookie), context(queuedJob.id)))).data.status, "succeeded");
   const saved = (await read(await saveRoute.POST(jsonRequest(`/api/generations/${regenerated.id}/save`, "POST", {}, cookie), context(regenerated.id)))).data;
   assert.equal(saved.id, (await read(await diariesRoute.GET(jsonRequest("/api/diaries", "GET", undefined, cookie)))).data.entries[0].id);
+  assert.equal(saved.photoAssetId, privatePhotoId);
+  const edited = (await read(await diaryRoute.PATCH(jsonRequest(`/api/diaries/${saved.id}`, "PATCH", { title: "改过的标题", summary: "新的摘要", body: "今天下过雨。" }, cookie), context(saved.id)))).data;
+  assert.equal(edited.title, "改过的标题");
+  const firstRevision = (await read(await diaryRevisionsRoute.GET(jsonRequest(`/api/diaries/${saved.id}/revisions`, "GET", undefined, cookie), context(saved.id)))).data[0];
+  assert.equal(firstRevision.title, saved.title);
+  const newMusicJob = (await read(await diaryRegenerateRoute.POST(jsonRequest(`/api/diaries/${saved.id}/regenerate`, "POST", { kind: "music", feedback: "更轻一些" }, cookie), context(saved.id)))).data;
+  let musicJob = newMusicJob;
+  for (let attempt = 0; attempt < 80 && !["succeeded", "failed"].includes(musicJob.status); attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    musicJob = (await read(await diaryRegenerationRoute.GET(jsonRequest(`/api/diary-regenerations/${newMusicJob.id}`, "GET", undefined, cookie), context(newMusicJob.id)))).data;
+  }
+  assert.equal(musicJob.status, "succeeded", musicJob.errorMessage ?? "music update did not succeed");
+  const musicUpdated = (await read(await diaryRoute.GET(jsonRequest(`/api/diaries/${saved.id}`, "GET", undefined, cookie), context(saved.id)))).data;
+  assert.notEqual(musicUpdated.audioAssetId, saved.audioAssetId);
+  assert.equal(musicUpdated.coverAssetId, saved.coverAssetId);
+  const restored = (await read(await restoreRoute.POST(jsonRequest(`/api/diaries/${saved.id}/revisions/${firstRevision.id}/restore`, "POST", {}, cookie), { params: Promise.resolve({ id: saved.id, revisionId: firstRevision.id }) }))).data;
+  assert.equal(restored.title, saved.title);
+  assert.equal(restored.audioAssetId, saved.audioAssetId);
+  const coverJob = (await read(await diaryRegenerateRoute.POST(jsonRequest(`/api/diaries/${saved.id}/regenerate`, "POST", { kind: "cover" }, cookie), context(saved.id)))).data;
+  let coverStatus = coverJob;
+  for (let attempt = 0; attempt < 80 && !["succeeded", "failed"].includes(coverStatus.status); attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    coverStatus = (await read(await diaryRegenerationRoute.GET(jsonRequest(`/api/diary-regenerations/${coverJob.id}`, "GET", undefined, cookie), context(coverJob.id)))).data;
+  }
+  assert.equal(coverStatus.status, "succeeded", coverStatus.errorMessage ?? "cover update did not succeed");
+  assert.notEqual((await read(await diaryRoute.GET(jsonRequest(`/api/diaries/${saved.id}`, "GET", undefined, cookie), context(saved.id)))).data.coverAssetId, saved.coverAssetId);
 
   assert.equal((await read(await publishRoute.POST(jsonRequest(`/api/diaries/${saved.id}/publish`, "POST", {}, cookie), context(saved.id)))).data.publishedAt !== null, true);
+  await assert.rejects(() => media.readMediaForUser(privatePhotoId, null), (error) => assertHttpError(error, "MEDIA_NOT_FOUND"));
   assert.equal((await read(await communityRoute.GET(jsonRequest("/api/community", "GET")))).data.items.length, 1);
   assert.equal((await read(await unpublishRoute.POST(jsonRequest(`/api/diaries/${saved.id}/unpublish`, "POST", {}, cookie), context(saved.id)))).data.publishedAt, null);
 
   const secondUserResponse = await registerRoute.POST(jsonRequest("/api/auth/register", "POST", { username: "second1", password: "second password", confirmPassword: "second password" }));
   const secondCookie = getCookie(secondUserResponse);
   assert.equal((await read(await diaryRoute.GET(jsonRequest(`/api/diaries/${saved.id}`, "GET", undefined, secondCookie), context(saved.id)))).data, null);
+  assert.equal((await diaryRoute.PATCH(jsonRequest(`/api/diaries/${saved.id}`, "PATCH", { title: "偷改", summary: "", body: "偷改" }, secondCookie), context(saved.id))).status, 404);
+  assert.equal((await diaryRevisionsRoute.GET(jsonRequest(`/api/diaries/${saved.id}/revisions`, "GET", undefined, secondCookie), context(saved.id))).status, 404);
+  assert.equal((await diaryPhotoRoute.DELETE(jsonRequest(`/api/diaries/${saved.id}/photo`, "DELETE", undefined, secondCookie), context(saved.id))).status, 404);
   assert.equal((await read(await generationRoute.GET(jsonRequest(`/api/generations/${regenerated.id}`, "GET", undefined, secondCookie), context(regenerated.id)))).error?.code, "GENERATION_NOT_FOUND");
 
   const secondSessionResponse = await sessionsRoute.POST(jsonRequest("/api/sessions", "POST", {}, secondCookie));
