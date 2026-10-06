@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
 import { apiFetch } from "@/lib/client";
@@ -40,7 +41,7 @@ function AuthFormContent({ mode }: { mode: "login" | "register" }) {
 
   return (
     <main className="auth-page">
-      <div className="auth-decoration"><span className="brand-dot" />Meloday</div>
+      <div className="auth-decoration"><Image src="/meloday-wordmark.webp" alt="Meloday" width={160} height={44} priority unoptimized /></div>
       <section className="auth-card">
         <span className="eyebrow">{isRegister ? "欢迎来到 Meloday" : "欢迎回来"}</span>
         <h1>{isRegister ? "给每天留一段旋律" : "继续听见你的故事"}</h1>

@@ -7,6 +7,7 @@ import { apiFetch, cacheHomeInput, cacheHomeState, formatDate, formatTime, resto
 import { draftText, type GenerationJob, type SessionSnapshot } from "@/lib/types";
 import { useAuth } from "./AuthContext";
 import { AnimatedAgentMessage } from "./AnimatedAgentMessage";
+import { AppIcon, WelcomeMark } from "./AppIcon";
 import { GenerationCard } from "./GenerationCard";
 
 function currentGreeting(): string {
@@ -263,16 +264,16 @@ export function HomeApp() {
     </div>}
 
     {!session && <section className="welcome-panel">
-      <div className="welcome-orbit"><span>♫</span></div>
+      <div className="welcome-mark" aria-hidden="true"><WelcomeMark /></div>
       <div><span className="eyebrow">给今天留一页</span><h2>你愿意和我说说今天吗？</h2><p>不用想得很完整，从一个画面、一句话，或者一种心情开始就好。</p><button className="button button-primary button-large" onClick={startSession} disabled={creating}>{creating ? "正在准备…" : "开始新日记  →"}</button></div>
       <div className="welcome-note"><span>随手写</span><span>慢慢说</span><span>留下来</span></div>
     </section>}
     {!session && <section className="quick-music-actions" aria-label="快捷生成音乐">
       <button type="button" className="quick-music-card quick-music-card--relax" onClick={() => void startQuickMusic("relax")} disabled={creating}>
-        <span className="quick-music-icon" aria-hidden="true">😴</span><span><strong>放松一下</strong><small>我想静静，别问我静静是谁</small></span>
+        <span className="quick-music-icon" aria-hidden="true"><AppIcon name="rest" /></span><span><strong>放松片刻</strong><small>为此刻谱一段舒缓的旋律</small></span>
       </button>
       <button type="button" className="quick-music-card quick-music-card--move" onClick={() => void startQuickMusic("move")} disabled={creating}>
-        <span className="quick-music-icon" aria-hidden="true">🏃</span><span><strong>动起来！</strong><small>一阵强劲的音乐响起</small></span>
+        <span className="quick-music-icon" aria-hidden="true"><AppIcon name="energy" /></span><span><strong>轻快出发</strong><small>为此刻谱一段轻快的旋律</small></span>
       </button>
     </section>}
 

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { useAuth } from "./AuthContext";
@@ -21,7 +22,7 @@ export function AppShell({ children, title, requireAuth = true }: { children: Re
     <main className="app-root">
       <div className="app-shell">
         <header className="topbar">
-          <Link href="/" className="brand-mark" aria-label="Meloday 首页"><span className="brand-dot" />Meloday</Link>
+          <Link href="/" className="brand-mark" aria-label="Meloday 首页"><Image src="/meloday-wordmark.webp" alt="" width={142} height={39} priority unoptimized /></Link>
           <div className="topbar-right">
             {title && <span className="topbar-title">{title}</span>}
             {user && <span id="topbar-status" className="topbar-status"><span className="topbar-slogan">把每一天，变成一段旋律！</span></span>}

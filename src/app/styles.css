@@ -27,8 +27,8 @@ button:disabled, input:disabled, textarea:disabled { cursor: not-allowed; opacit
 .app-root { position: fixed; inset: 0; width: 100%; height: 100dvh; min-width: 0; min-height: 0; overflow: hidden; padding: 0; }
 .app-shell { position: relative; display: flex; flex-direction: column; width: min(100%, 430px); height: 100dvh; min-width: 0; min-height: 0; margin: 0 auto; overflow: hidden; background: rgba(255, 253, 248, .62); border-inline: 1px solid rgba(74, 101, 91, .06); box-shadow: 0 0 70px rgba(76, 83, 66, .1); container-type: size; container-name: meloday-shell; }
 .topbar { flex: 0 0 68px; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid var(--line); background: rgba(251, 248, 241, .76); backdrop-filter: blur(18px); z-index: 5; }
-.brand-mark { display: inline-flex; align-items: center; gap: 9px; color: var(--ink); font-family: Georgia, "Times New Roman", serif; font-size: 23px; letter-spacing: -.04em; }
-.brand-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--peach); box-shadow: 6px -4px 0 var(--sage); }
+.brand-mark { display: inline-flex; align-items: center; flex: 0 0 auto; }
+.brand-mark img { display: block; width: 142px; height: auto; }
 .topbar-right { display: flex; align-items: center; gap: 14px; }
 .topbar-title { color: var(--muted); font-size: 13px; }
 .topbar-slogan { color: var(--muted); font-size: 12px; }
@@ -39,9 +39,12 @@ button:disabled, input:disabled, textarea:disabled { cursor: not-allowed; opacit
 .page-scroll::-webkit-scrollbar, .paper-lines::-webkit-scrollbar { width: 5px; }
 .page-scroll::-webkit-scrollbar-thumb, .paper-lines::-webkit-scrollbar-thumb { background: rgba(109,148,132,.35); border-radius: 99px; }
 .bottom-nav { flex: 0 0 72px; display: flex; align-items: center; justify-content: space-around; padding: 5px 24px max(7px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: rgba(251, 248, 241, .88); backdrop-filter: blur(18px); z-index: 5; }
-.nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 64px; color: #9aa69f; font-size: 11px; transition: color .2s, transform .2s; }
-.nav-item span { font-size: 21px; line-height: 1; }
-.nav-item.active { color: var(--sage-deep); transform: translateY(-2px); }
+.nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 64px; color: #7d8d84; font-size: 11px; transition: color .2s; }
+.nav-icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; transition: background .2s; }
+.nav-icon svg { display: block; width: 23px; height: 23px; }
+.nav-item:hover, .nav-item.active { color: var(--sage-deep); }
+.nav-item.active .nav-icon { background: rgba(109, 148, 132, .13); }
+.nav-item:focus-visible { outline: 2px solid var(--sage-deep); outline-offset: 2px; border-radius: 8px; }
 
 .loading-screen, .loading-panel { display: grid; place-items: center; gap: 12px; color: var(--muted); font-size: 14px; }
 .loading-screen { width: min(100%, 430px); height: 100dvh; margin: 0 auto; }
@@ -71,19 +74,22 @@ button:disabled, input:disabled, textarea:disabled { cursor: not-allowed; opacit
 .home-heading p, .page-intro p { margin: 0; color: var(--muted); font-size: 13px; }
 .welcome-panel { position: relative; display: grid; grid-template-columns: 150px 1fr; gap: 28px; align-items: center; min-height: 310px; margin-top: 48px; padding: 44px 46px; overflow: hidden; border-radius: 32px; background: linear-gradient(135deg, rgba(255,253,248,.96), rgba(235,244,235,.82)); box-shadow: var(--shadow); }
 .welcome-panel::after { content: ""; position: absolute; right: -45px; bottom: -70px; width: 230px; height: 230px; border: 1px solid rgba(109,148,132,.2); border-radius: 50%; box-shadow: 0 0 0 18px rgba(109,148,132,.05), 0 0 0 38px rgba(109,148,132,.035); }
-.welcome-orbit { display: grid; place-items: center; width: 128px; height: 128px; border: 1px solid rgba(200,134,93,.25); border-radius: 46% 54% 58% 42%; background: radial-gradient(circle at 35% 30%, #fff3df, #edc6a4 70%); color: white; font-size: 60px; font-family: Georgia, serif; transform: rotate(-8deg); box-shadow: 8px 13px 0 rgba(154,181,165,.3); }
+.welcome-mark { display: grid; place-items: center; width: 112px; height: 112px; border-radius: 50%; background: #f6e6d8; }
+.welcome-mark svg { display: block; width: 76%; height: 76%; }
 .welcome-panel h2 { margin: 10px 0 9px; font-family: Georgia, "Songti SC", serif; font-size: clamp(25px, 4vw, 34px); font-weight: 500; letter-spacing: -.06em; }
 .welcome-panel p { max-width: 360px; margin: 0 0 24px; color: var(--muted); font-size: 14px; line-height: 1.9; }
 .welcome-note { position: absolute; right: 42px; top: 30px; display: flex; gap: 8px; color: rgba(109,148,132,.75); font-size: 11px; transform: rotate(5deg); }
 .welcome-note span { padding: 5px 9px; border: 1px solid rgba(109,148,132,.24); border-radius: 99px; background: rgba(255,255,255,.35); }
 .quick-music-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
-.quick-music-card { position: relative; display: flex; align-items: center; width: 100%; min-height: 96px; gap: 15px; padding: 17px 20px; overflow: hidden; border: 1px solid var(--line); border-radius: 21px; background: rgba(255,253,248,.82); color: var(--ink); text-align: left; box-shadow: 0 8px 24px rgba(76,83,66,.05); transition: transform .2s, box-shadow .2s, border-color .2s; }
+.quick-music-card { position: relative; display: flex; align-items: center; width: 100%; min-height: 96px; gap: 15px; padding: 17px 20px; overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,253,248,.82); color: var(--ink); text-align: left; transition: transform .2s, border-color .2s; }
 .quick-music-card::after { content: ""; position: absolute; right: -24px; bottom: -53px; width: 126px; height: 126px; border: 1px solid currentColor; border-radius: 50%; opacity: .1; }
-.quick-music-card:hover:not(:disabled) { border-color: rgba(109,148,132,.35); box-shadow: 0 12px 26px rgba(76,83,66,.1); transform: translateY(-2px); }
+.quick-music-card:hover:not(:disabled) { border-color: rgba(109,148,132,.35); transform: translateY(-2px); }
 .quick-music-card:focus-visible { outline: 3px solid rgba(109,148,132,.3); outline-offset: 2px; }
 .quick-music-card--relax { color: var(--sage-deep); background: linear-gradient(120deg, rgba(255,253,248,.94), rgba(231,242,234,.78)); }
 .quick-music-card--move { color: var(--peach-deep); background: linear-gradient(120deg, rgba(255,253,248,.94), rgba(255,239,224,.8)); }
-.quick-music-icon { position: relative; z-index: 1; display: grid; place-items: center; flex: 0 0 52px; width: 52px; height: 52px; border-radius: 17px; background: rgba(255,255,255,.65); box-shadow: 4px 5px 0 rgba(109,148,132,.14); font: 30px Georgia, serif; }
+.quick-music-icon { position: relative; z-index: 1; display: grid; place-items: center; flex: 0 0 52px; width: 52px; height: 52px; border-radius: 50%; background: rgba(109,148,132,.13); }
+.quick-music-card--move .quick-music-icon { background: rgba(200,134,93,.14); }
+.quick-music-icon svg { width: 31px; height: 31px; }
 .quick-music-card > span:last-child { position: relative; z-index: 1; display: grid; gap: 5px; }.quick-music-card strong { font: 500 21px Georgia, "Songti SC", serif; letter-spacing: -.04em; }.quick-music-card small { color: var(--muted); font-size: 12px; }
 .home-writing { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 14px; flex: 1 1 auto; min-height: 0; margin-top: 18px; }
 .home-page--session .home-writing { margin-top: 0; }
@@ -147,9 +153,10 @@ label input:focus { border-color: rgba(109,148,132,.5); box-shadow: 0 0 0 3px rg
 
 .detail-back { display: flex; justify-content: space-between; margin-bottom: 17px; color: var(--sage-deep); font-size: 12px; }.detail-back span { color: var(--muted); }.saved-card { display: grid; grid-template-columns: 230px 1fr; gap: 23px; padding: 22px; }.saved-main { padding-top: 8px; }.saved-main h1 { margin: 9px 0 9px; font: 500 30px Georgia, "Songti SC", serif; letter-spacing: -.06em; }.saved-summary { margin: 0 0 19px; color: var(--muted); font-size: 13px; line-height: 1.8; }.saved-body { grid-column: 1 / -1; padding: 22px 10px 8px; border-top: 1px solid var(--line); }.saved-body p { margin: 0 0 13px; color: var(--ink); font: 16px/2 Georgia, "Songti SC", serif; white-space: pre-wrap; }.detail-actions { grid-column: 1 / -1; display: flex; gap: 9px; padding-top: 3px; }
 
-.mine-page { max-width: 720px; margin: 0 auto; }.profile-avatar { position: relative; display: grid; place-items: center; width: 75px; height: 75px; overflow: hidden; border: 4px solid rgba(255,255,255,.75); border-radius: 46% 54% 51% 49%; background: var(--peach); color: white; font: 30px Georgia, serif; box-shadow: 8px 8px 0 rgba(154,181,165,.35); }.settings-card, .capacity-section { margin-top: 18px; padding: 22px; }.settings-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 17px; font-size: 14px; font-weight: 700; }.settings-title strong { color: var(--sage-deep); font: 500 22px Georgia, serif; }.upload-link { position: relative; color: var(--sage-deep); font-size: 11px; font-weight: 700; cursor: pointer; }.upload-link input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }.settings-card form { display: grid; gap: 13px; }.settings-card label, .auth-card label { display: grid; gap: 6px; color: var(--muted); font-size: 11px; font-weight: 700; }.settings-card input, .auth-card input { width: 100%; min-height: 43px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; outline: 0; background: white; color: var(--ink); font-size: 13px; }.capacity-section p { margin: 15px 0; color: var(--muted); font-size: 12px; line-height: 1.8; }.capacity-track { height: 7px; overflow: hidden; border-radius: 99px; background: var(--paper-deep); }.capacity-track span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--sage), var(--peach)); transition: width .4s; }.logout-button { display: block; margin: 24px auto 5px; border: 0; background: transparent; color: #a96854; font-size: 12px; }
+.mine-page { max-width: 720px; margin: 0 auto; }.profile-avatar { position: relative; display: grid; place-items: center; width: 75px; height: 75px; overflow: hidden; border-radius: 50%; background: #e7eee8; color: var(--sage-deep); }.profile-avatar svg { width: 42px; height: 42px; }.settings-card, .capacity-section { margin-top: 18px; padding: 22px; }.settings-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 17px; font-size: 14px; font-weight: 700; }.settings-title strong { color: var(--sage-deep); font: 500 22px Georgia, serif; }.upload-link { position: relative; color: var(--sage-deep); font-size: 11px; font-weight: 700; cursor: pointer; }.upload-link input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }.settings-card form { display: grid; gap: 13px; }.settings-card label, .auth-card label { display: grid; gap: 6px; color: var(--muted); font-size: 11px; font-weight: 700; }.settings-card input, .auth-card input { width: 100%; min-height: 43px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; outline: 0; background: white; color: var(--ink); font-size: 13px; }.capacity-section p { margin: 15px 0; color: var(--muted); font-size: 12px; line-height: 1.8; }.capacity-track { height: 7px; overflow: hidden; border-radius: 99px; background: var(--paper-deep); }.capacity-track span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--sage), var(--peach)); transition: width .4s; }.logout-button { display: block; margin: 24px auto 5px; border: 0; background: transparent; color: #a96854; font-size: 12px; }
 
 .auth-page { display: grid; place-items: center; position: relative; width: min(100%, 430px); height: 100dvh; margin: 0 auto; padding: 22px; background: radial-gradient(circle at 12% 10%, rgba(233,185,148,.32), transparent 25rem), radial-gradient(circle at 95% 85%, rgba(154,181,165,.33), transparent 26rem), var(--cream); box-shadow: 0 0 70px rgba(76, 83, 66, .1); container-type: size; container-name: auth-page; }.auth-decoration { position: absolute; top: 35px; left: 35px; display: flex; align-items: center; gap: 9px; font: 24px Georgia, serif; }.auth-card { width: min(100%, 410px); padding: 39px 35px 31px; border: 1px solid rgba(74,101,91,.1); border-radius: 30px; background: rgba(255,253,248,.9); box-shadow: var(--shadow); }.auth-card h1 { margin: 10px 0 10px; font: 500 31px Georgia, "Songti SC", serif; letter-spacing: -.07em; }.auth-intro { margin: 0 0 26px; color: var(--muted); font-size: 13px; line-height: 1.8; }.auth-card form { display: grid; gap: 15px; }.auth-card form .button { margin-top: 5px; }.form-error { margin: 0; color: #a96854; font-size: 12px; }.auth-switch { margin: 22px 0 0; color: var(--muted); font-size: 12px; text-align: center; }.auth-switch a { margin-left: 4px; color: var(--sage-deep); font-weight: 700; }.auth-footer { position: absolute; bottom: 24px; color: rgba(123,137,129,.75); font: 12px Georgia, serif; }
+.auth-decoration img { display: block; width: 160px; height: auto; }
 
 @container meloday-shell (max-width: 700px) {
   .topbar { flex-basis: 60px; padding: 0 18px; }
@@ -160,17 +167,18 @@ label input:focus { border-color: rgba(109,148,132,.5); box-shadow: 0 0 0 3px rg
   .home-heading h1, .page-intro h1 { font-size: 30px; }
   .home-heading p, .page-intro p { font-size: 12px; }
   .welcome-panel { grid-template-columns: 1fr; gap: 18px; min-height: 0; margin-top: 31px; padding: 29px 24px 32px; }
-  .welcome-orbit { width: 80px; height: 80px; font-size: 37px; }
+  .welcome-mark { width: 80px; height: 80px; }
   .welcome-panel h2 { font-size: 27px; }
   .welcome-panel p { font-size: 13px; }
   .welcome-note { right: 20px; top: 16px; font-size: 9px; }
   .quick-music-actions { gap: 10px; margin-top: 14px; }
   .quick-music-card { min-height: 86px; padding: 14px 16px; }
-  .quick-music-icon { flex-basis: 46px; width: 46px; height: 46px; font-size: 27px; }
+  .quick-music-icon { flex-basis: 46px; width: 46px; height: 46px; }
+  .quick-music-icon svg { width: 28px; height: 28px; }
   .quick-music-card strong { font-size: 19px; }
   .home-writing { gap: 10px; margin-top: 13px; }
   .agent-panel { gap: 8px; padding: 10px; }
-  .agent-avatar { flex-basis: 43px; width: 43px; height: 43px; font-size: 21px; }
+  .agent-avatar { flex-basis: 43px; width: 43px; height: 43px; }
   .agent-bubble { padding: 10px 12px; }
   .agent-bubble-content { min-height: 52px; }
   .agent-panel > .small-link { margin-top: 6px; font-size: 11px; }
@@ -199,7 +207,7 @@ label input:focus { border-color: rgba(109,148,132,.5); box-shadow: 0 0 0 3px rg
 }
 
 @container auth-page (max-width: 700px) {
-  .auth-decoration { top: 24px; left: 22px; font-size: 21px; }.auth-card { padding: 31px 23px 25px; }.auth-card h1 { font-size: 27px; }.auth-footer { bottom: 14px; }
+  .auth-decoration { top: 24px; left: 22px; }.auth-decoration img { width: 146px; }.auth-card { padding: 31px 23px 25px; }.auth-card h1 { font-size: 27px; }.auth-footer { bottom: 14px; }
 }
 
 @container meloday-shell (max-width: 700px) and (max-height: 760px) {
@@ -207,7 +215,7 @@ label input:focus { border-color: rgba(109,148,132,.5); box-shadow: 0 0 0 3px rg
   .home-heading { gap: 10px; }
   .home-heading h1 { margin-top: 4px; font-size: 26px; }
   .welcome-panel { margin-top: 19px; padding-block: 20px; }
-  .welcome-orbit { width: 62px; height: 62px; }
+  .welcome-mark { width: 62px; height: 62px; }
   .welcome-panel h2 { margin-top: 5px; font-size: 23px; }
   .welcome-panel p { margin-bottom: 14px; }
   .home-writing { gap: 8px; margin-top: 8px; }
@@ -245,3 +253,4 @@ label input:focus { border-color: rgba(109,148,132,.5); box-shadow: 0 0 0 3px rg
 @container meloday-shell (max-width: 700px) and (max-height: 760px) { .mine-page { padding-top: 14px; padding-bottom: 12px; }.mine-page .page-intro { margin-bottom: 10px; }.mine-page .page-intro p, .mine-page .capacity-section p, .mine-page .checkin-section p { display: none; }.mine-page .profile-avatar { width: 58px; height: 58px; font-size: 24px; }.mine-page .settings-card, .mine-page .capacity-section, .mine-page .checkin-section { margin-top: 8px; padding: 12px; border-radius: 18px; }.mine-page .settings-title { margin-bottom: 9px; }.mine-page .settings-card form { gap: 8px; }.mine-page .settings-card input { min-height: 37px; }.mine-page .settings-card .button, .mine-page .capacity-section > .button { min-height: 35px; }.mine-page .checkin-days { gap: 4px; }.mine-page .logout-button { margin: 11px auto 0; } }
 
 .mine-page .page-intro { margin-bottom: 18px; }.mine-page .checkin-section { margin-top: 14px; padding-block: 16px; }.mine-page .checkin-section p { display: -webkit-box; overflow: hidden; margin: 10px 0 0; -webkit-box-orient: vertical; -webkit-line-clamp: 1; }.mine-page .capacity-section { margin-top: 14px; }.logout-section { display: grid; place-items: center; min-height: 64px; padding: 10px 0 max(12px, env(safe-area-inset-bottom)); }.logout-section .logout-button { margin: 0; }
+@media (prefers-reduced-motion: reduce) { .nav-item, .nav-icon, .quick-music-card { transition: none; }.quick-music-card:hover:not(:disabled) { transform: none; } }
