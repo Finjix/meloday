@@ -30,7 +30,7 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     const rangeMatch = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
-    if (!rangeMatch || totalLength === 0) return new Response(null, { status: 416, headers: new Headers({ "Content-Range": `bytes */${totalLength}` }) });
+    if (!rangeMatch || (!rangeMatch[1] && !rangeMatch[2]) || totalLength === 0) return new Response(null, { status: 416, headers: new Headers({ "Content-Range": `bytes */${totalLength}` }) });
     const [, startText, endText] = rangeMatch;
     const suffixLength = endText && !startText ? Number(endText) : null;
     const start = startText ? Number(startText) : Math.max(totalLength - (suffixLength ?? 0), 0);

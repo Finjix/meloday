@@ -15,9 +15,11 @@ export async function POST(request: Request) {
     const username = validateUsername(input.username, 8);
     const password = validatePassword(input.password);
     if (getUserByUsername(username)) return NextResponse.json({ error: { code: "USERNAME_TAKEN", message: "这个用户名已经被使用了。" } }, { status: 409 });
-    const user = createUser({ username, displayName: username, passwordHash: await hashPassword(password) });
+    const passwordHash = await hashPassword(password);
+    if (getUserByUsername(username)) return NextResponse.json({ error: { code: "USERNAME_TAKEN", message: "这个用户名已经被使用了。" } }, { status: 409 });
+    const user = createUser({ username, displayName: username, passwordHash });
     const response = ok({ user, capacity: { used: 0, limit: user.diaryLimit } });
-    setSessionCookie(response, createSessionCookie(user.id));
+    setSessionCookie(response, createSessionCookie(user.id), request);
     return response;
   } catch (error) {
     return apiError(error);

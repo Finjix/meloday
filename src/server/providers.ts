@@ -298,7 +298,7 @@ export function assertSafeProviderDownloadUrl(value: string): URL {
   } catch {
     throw new ProviderError("tokenhub", 502, "媒体服务返回了无效的下载地址。");
   }
-  if (url.protocol !== "https:" || url.username || url.password || (url.port && url.port !== "443")) {
+  if (!config.tokenHubDownloadHosts.has(url.hostname.toLowerCase()) || url.protocol !== "https:" || url.username || url.password || (url.port && url.port !== "443")) {
     throw new ProviderError("tokenhub", 502, "媒体服务返回了不受信任的下载地址。");
   }
   return url;

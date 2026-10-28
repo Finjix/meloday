@@ -35,7 +35,7 @@ export function DiaryDetail({ id }: { id: string }) {
     ]);
     setEntry(nextEntry);
     setRevisions(nextRevisions);
-    if (nextEntry) setForm({ title: nextEntry.title, summary: nextEntry.summary, body: nextEntry.body });
+
   }, [id]);
 
   useEffect(() => {
@@ -44,17 +44,19 @@ export function DiaryDetail({ id }: { id: string }) {
     void apiFetch<DiaryRegeneration | null>(`/api/diaries/${id}/regenerate`).then(setJob).catch(() => undefined);
   }, [id, refresh]);
 
+  const jobId = job?.id;
+  const jobStatus = job?.status;
   useEffect(() => {
-    if (!job || (job.status !== "queued" && job.status !== "running")) return;
+    if (!jobId || (jobStatus !== "queued" && jobStatus !== "running")) return;
     const timer = window.setInterval(() => {
-      void apiFetch<DiaryRegeneration>(`/api/diary-regenerations/${job.id}`).then(async (next) => {
+      void apiFetch<DiaryRegeneration>(`/api/diary-regenerations/${jobId}`).then(async (next) => {
         setJob(next);
         if (next.status === "succeeded") await refresh();
         if (next.status === "failed") setError(next.errorMessage || "生成没有完成，请稍后重试。");
       }).catch((err) => setError(err instanceof Error ? err.message : "无法读取生成进度。"));
     }, 1300);
     return () => window.clearInterval(timer);
-  }, [job, refresh]);
+  }, [jobId, jobStatus, refresh]);
 
   const saveText = async () => {
     setBusy(true); setError("");

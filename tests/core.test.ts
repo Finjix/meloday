@@ -156,7 +156,8 @@ test("agent JSON, intent, state merge and provider decoders", async () => {
   assert.throws(() => providers.decodeHexAudio("fg"), (error) => error instanceof providers.ProviderError);
   assert.throws(() => providers.decodeBase64Image("not base64?"), (error) => error instanceof providers.ProviderError);
   assert.throws(() => providers.assertSafeProviderDownloadUrl("http://127.0.0.1/internal"), (error) => error instanceof providers.ProviderError);
-  assert.doesNotThrow(() => providers.assertSafeProviderDownloadUrl("https://untrusted.example/file.mp3"));
+  assert.throws(() => providers.assertSafeProviderDownloadUrl("https://untrusted.example/file.mp3"), (error) => error instanceof providers.ProviderError);
+  assert.doesNotThrow(() => providers.assertSafeProviderDownloadUrl("https://tokenhub.tencentmaas.com/file.mp3"));
   assert.throws(() => providers.assertSafeProviderDownloadUrl("http://untrusted.example/file.mp3"), (error) => error instanceof providers.ProviderError);
 });
 
@@ -212,8 +213,10 @@ test("capacity, saved-generation retention and media privacy", async () => {
   repositories.completeGeneration(secondJob.id);
   assert.throws(() => generation.saveGeneration(secondJob.id, user.id), (error) => assertHttpError(error, "CAPACITY_REACHED"));
 
+  const checkinsBefore = repositories.getDiaryCheckinStatus(user.id).totalDays;
   repositories.deleteDiaryEntry(saved.id, user.id);
-  assert.equal(await media.removeOrphanedMedia(), 1);
+  assert.equal(repositories.getDiaryCheckinStatus(user.id).totalDays, checkinsBefore);
+  assert.equal(await media.removeOrphanedMedia(0), 1);
   await assert.rejects(() => media.readMediaForUser(audioAssetId, user.id), (error) => assertHttpError(error, "MEDIA_NOT_FOUND"));
 });
 
@@ -272,6 +275,7 @@ test("API flow covers auth, generation, save, publish and isolation", async () =
   assert.equal((await loginRoute.POST(jsonRequest("/api/auth/login", "POST", { username: "apiuser", password: "wrong password" }))).status, 401);
   const loggedIn = await loginRoute.POST(jsonRequest("/api/auth/login", "POST", { username: "apiuser", password: "api password" }));
   assert.equal(loggedIn.status, 200);
+  assert.equal("passwordHash" in (await read(loggedIn)).data.user, false);
   const cookie = getCookie(loggedIn);
   assert.ok(cookie);
   assert.equal((await read(await meRoute.GET(jsonRequest("/api/me", "GET", undefined, cookie)))).data.user.username, "apiuser");
@@ -376,4 +380,77 @@ test("API flow covers auth, generation, save, publish and isolation", async () =
   assert.equal((await read(await communityRoute.GET(jsonRequest("/api/community", "GET")))).data.items.length, 0);
   assert.equal((await read(await logoutRoute.POST(jsonRequest("/api/auth/logout", "POST", {}, cookie)))).data.ok, true);
   assert.equal((await read(await meRoute.GET(jsonRequest("/api/me", "GET", undefined, cookie)))).data, null);
+});
+
+
+test("opening a maintenance connection preserves jobs; startup explicitly recovers them", async () => {
+  await loadRuntime(); repositories.resetSchemaForTests();
+  const user = repositories.createUser({ username: "recovery", displayName: "Recovery", passwordHash: "test" });
+  const sessionId = repositories.createActiveSession({ userId: user.id, expiresAt: new Date(Date.now() + 86400000).toISOString() });
+  const job = repositories.createGenerationJob({ sessionId, userId: user.id, musicDirection: types.DEFAULT_AGENT_STATE.musicDirection });
+  repositories.claimActiveSessionForGeneration(sessionId, user.id);
+  database.closeDb();
+  assert.equal(repositories.getGenerationJob(job.id, user.id)?.status, "queued");
+  assert.equal(repositories.getActiveSession(sessionId, user.id)?.status, "generating");
+  database.recoverInterruptedJobs();
+  assert.equal(repositories.getGenerationJob(job.id, user.id)?.status, "failed");
+  assert.equal(repositories.getActiveSession(sessionId, user.id)?.status, "active");
+});
+
+test("concurrent messages and generation cannot overwrite the same diary draft", async () => {
+  await loadRuntime(); repositories.resetSchemaForTests();
+  const sessions = await import("../src/server/session-service");
+  const user = repositories.createUser({ username: "parallel", displayName: "Parallel", passwordHash: "test" });
+  const session = sessions.newSeededSession(user.id, "A quiet morning");
+  const reply = sessions.receiveMessage(session.id, user.id, "Parallel", "I went for a walk");
+  const concurrentReply = sessions.receiveMessage(session.id, user.id, "Parallel", "another message");
+  assert.throws(() => generation.beginGeneration(session.id, user.id), (error) => assertHttpError(error, "MESSAGE_IN_PROGRESS"));
+  assert.throws(() => sessions.endSession(session.id, user.id), (error) => assertHttpError(error, "MESSAGE_IN_PROGRESS"));
+  await assert.rejects(() => concurrentReply, (error) => assertHttpError(error, "MESSAGE_IN_PROGRESS"));
+  const result = await reply;
+  assert.equal(result.snapshot.draft.userTurnCount, 2);
+  assert.equal(result.snapshot.draft.recentText, "A quiet morning\nI went for a walk");
+});
+
+test("cleanup leaves a newly written upload alive until it can be attached", async () => {
+  await loadRuntime(); repositories.resetSchemaForTests();
+  const user = repositories.createUser({ username: "upload", displayName: "Upload", passwordHash: "test" });
+  const id = await media.writeMedia("audio", user.id, Buffer.from("ID3audio"), "audio/mpeg", "mp3");
+  assert.equal(await media.removeOrphanedMedia(), 0);
+  assert.ok(await media.readMediaForUser(id, user.id));
+  assert.equal(await media.removeOrphanedMedia(0), 1);
+});
+
+test("generation tasks share a bounded queue across callers", async () => {
+  const queue = await import("../src/server/generation-queue");
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  let running = 0; let peak = 0; let completed = 0;
+  const done = new Promise<void>((resolve) => {
+    for (let index = 0; index < 22; index += 1) {
+      queue.assertGenerationQueueCapacity();
+      queue.enqueueGenerationTask(async () => {
+        running += 1; peak = Math.max(peak, running);
+        await gate;
+        running -= 1; completed += 1;
+        if (completed === 22) resolve();
+      });
+    }
+  });
+  assert.throws(() => queue.assertGenerationQueueCapacity(), (error) => assertHttpError(error, "GENERATION_QUEUE_FULL"));
+  release(); await done;
+  assert.equal(peak, 2);
+});
+
+test("HTTP and HTTPS sessions use matching cookies and malformed pagination is rejected", async () => {
+  const { NextResponse } = await import("next/server");
+  for (const protocol of ["http", "https"]) {
+    const response = NextResponse.json({});
+    auth.setSessionCookie(response, "test-token", new Request("http://localhost/api/auth/login", { headers: { "x-forwarded-proto": protocol, "x-forwarded-host": "diary.example.com" } }));
+    assert.equal(/; Secure/i.test(response.headers.get("set-cookie") ?? ""), protocol === "https");
+  }
+  const community = await import("../src/app/api/community/route");
+  for (const value of ["NaN", "Infinity", "-1", "1.5"]) assert.equal((await community.GET(new Request(`http://localhost/api/community?offset=${value}`))).status, 400);
+  const login = await import("../src/app/api/auth/login/route");
+  assert.equal((await login.POST(new Request("http://localhost/api/auth/login", { method: "POST", body: "{" }))).status, 400);
 });

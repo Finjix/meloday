@@ -237,7 +237,7 @@ export function deleteSessionMessage(id: string): void {
 }
 
 export function getSessionMessages(sessionId: string): ChatMessage[] {
-  const rows = getDb().prepare("SELECT id, role, content, created_at FROM session_messages WHERE session_id = ? ORDER BY created_at, id").all(sessionId) as Array<{ id: string; role: "user" | "agent"; content: string; created_at: string }>;
+  const rows = getDb().prepare("SELECT id, role, content, created_at FROM session_messages WHERE session_id = ? ORDER BY created_at, rowid").all(sessionId) as Array<{ id: string; role: "user" | "agent"; content: string; created_at: string }>;
   return rows.map((row) => ({ id: row.id, role: row.role, content: row.content, createdAt: row.created_at }));
 }
 
@@ -515,16 +515,17 @@ export function getSharedDiaryEntry(id: string): SharedDiaryEntry | null {
   return { id: row.entry_id, title: row.title, summary: row.summary, body: row.body, audioAssetId: row.audio_asset_id, coverAssetId: row.cover_asset_id, createdAt: row.created_at, authorName: row.author_name, authorAvatarAssetId: row.author_avatar_asset_id, publishedAt: row.published_at };
 }
 
-export function deleteOrphanedMedia(): Array<{ id: string; storagePath: string }> {
+export function deleteOrphanedMedia(minAgeMs = 5 * 60 * 1000): Array<{ id: string; storagePath: string }> {
   const rows = getDb().prepare(`
     SELECT m.id, m.storage_path AS storagePath FROM media_assets m
-    WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_asset_id = m.id)
+    WHERE m.created_at <= ?
+      AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_asset_id = m.id)
       AND NOT EXISTS (SELECT 1 FROM generation_jobs g WHERE g.audio_asset_id = m.id OR g.cover_asset_id = m.id)
       AND NOT EXISTS (SELECT 1 FROM active_sessions s WHERE s.photo_asset_id = m.id)
       AND NOT EXISTS (SELECT 1 FROM diary_entries d WHERE d.audio_asset_id = m.id OR d.cover_asset_id = m.id OR d.photo_asset_id = m.id)
       AND NOT EXISTS (SELECT 1 FROM diary_revisions r WHERE r.audio_asset_id = m.id OR r.cover_asset_id = m.id OR r.photo_asset_id = m.id)
       AND NOT EXISTS (SELECT 1 FROM diary_regeneration_jobs j WHERE j.asset_id = m.id)
-  `).all() as Array<{ id: string; storagePath: string }>;
+  `).all(new Date(Date.now() - minAgeMs).toISOString()) as Array<{ id: string; storagePath: string }>;
   if (rows.length) getDb().prepare(`DELETE FROM media_assets WHERE id IN (${rows.map(() => "?").join(",")})`).run(...rows.map((row) => row.id));
   return rows;
 }

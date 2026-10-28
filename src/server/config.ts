@@ -29,7 +29,7 @@ export const config = {
   tokenHubDownloadHosts: downloadHosts,
   textModel: process.env.TOKENHUB_TEXT_MODEL ?? "deepseek/deepseek-flash",
   musicModel: process.env.TOKENHUB_MUSIC_MODEL ?? "minimax-music-v3.0",
-  imageModel: process.env.TOKENHUB_IMAGE_MODEL ?? "seedream-image-v5.0-lite",
+  imageModel: process.env.TOKENHUB_IMAGE_MODEL ?? "seedream-image-v5.0-flash",
   sessionTtlHours: boundedInteger("MELODAY_SESSION_TTL_HOURS", 24, 1, 168),
   generationTimeoutMs: boundedInteger("MELODAY_GENERATION_TIMEOUT_MS", 180000, 1_000, 600_000),
   generationMaxConcurrent: boundedInteger("MELODAY_GENERATION_MAX_CONCURRENT", 2, 1, 8),

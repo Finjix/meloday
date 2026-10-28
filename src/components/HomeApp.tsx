@@ -61,6 +61,8 @@ export function HomeApp() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const pollVersion = useRef(0);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const generationInFlight = Boolean(job && (job.status === "queued" || job.status === "running"));
 
   const setSession = (next: SessionSnapshot | null) => {
@@ -105,6 +107,7 @@ export function HomeApp() {
 
   useEffect(() => { resizeTextarea(); }, [input, resizeTextarea]);
   useEffect(() => () => recognitionRef.current?.stop(), []);
+  useEffect(() => { void loadSession(); return () => { pollVersion.current += 1; }; }, [loadSession]);
 
   const dictate = (target: "quick" | "composer") => {
     if (listening) { recognitionRef.current?.stop(); return; }
@@ -189,7 +192,6 @@ export function HomeApp() {
       setSession(result.session);
       setJob(result.job);
       setInput("");
-      void pollGeneration(result.job.id);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "暂时无法开始生成音乐。");
     } finally {
@@ -221,12 +223,13 @@ export function HomeApp() {
   };
 
   const uploadSessionPhoto = async (file: File) => {
-    if (!session) return;
+    if (!session || uploadingPhoto) return;
+    setUploadingPhoto(true);
     const form = new FormData(); form.set("photo", file);
     setNotice("");
     try { setSession(await apiFetch<SessionSnapshot>(`/api/sessions/${session.id}/photo`, { method: "POST", body: form })); }
     catch (error) { setNotice(error instanceof Error ? error.message : "照片上传失败。"); }
-    finally { if (photoInputRef.current) photoInputRef.current.value = ""; }
+    finally { setUploadingPhoto(false); if (photoInputRef.current) photoInputRef.current.value = ""; }
   };
 
   const removeSessionPhoto = async () => {
@@ -237,7 +240,7 @@ export function HomeApp() {
 
   const sendMessage = async (contentToRetry?: string) => {
     const content = (contentToRetry ?? input).trim();
-    if (!content || !session || session.status !== "active" || sending || generationInFlight) return;
+    if (!content || !session || uploadingPhoto || session.status !== "active" || sending || generationInFlight) return;
     const previousSession = session;
     const sentAt = new Date().toISOString();
     const optimisticSession: SessionSnapshot = {
@@ -267,21 +270,24 @@ export function HomeApp() {
   };
 
   const startGeneration = async (sessionId: string) => {
+    if (uploadingPhoto) return;
     setNotice(""); setGenerationCardOpen(false);
     try {
       const nextJob = await apiFetch<GenerationJob>(`/api/sessions/${sessionId}/generate`, { method: "POST", body: JSON.stringify({}) });
       setJob(nextJob);
-      void pollGeneration(nextJob.id);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "暂时无法开始生成。");
     }
   };
 
   const pollGeneration = async (generationId: string) => {
+    const version = ++pollVersion.current;
     for (let attempt = 0; attempt < 240; attempt += 1) {
       await new Promise((resolve) => window.setTimeout(resolve, 1200));
+      if (version !== pollVersion.current) return;
       try {
         const next = await apiFetch<GenerationJob>(`/api/generations/${generationId}`);
+        if (version !== pollVersion.current) return;
         setJob(next);
         if (next.status === "succeeded" || next.status === "failed") {
           await loadSession();
@@ -295,11 +301,20 @@ export function HomeApp() {
     setNotice("生成时间有些久，你可以稍后回到首页查看。");
   };
 
+  useEffect(() => {
+    if (job && (job.status === "queued" || job.status === "running")) void pollGeneration(job.id);
+    return () => { pollVersion.current += 1; };
+    // Only a change of job starts a new polling loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job?.id]);
+
   const saveJob = async () => {
     if (!job || job.status !== "succeeded") return;
     setSaving(true); setNotice("");
     try {
       await apiFetch<{ id: string }>(`/api/generations/${job.id}/save`, { method: "POST" });
+      resetHomeCache();
+      setSession(null); setJob(null); setInput("");
       await refresh();
       router.push("/diary");
     } catch (error) {
@@ -376,13 +391,13 @@ export function HomeApp() {
           {noticeView}
           <form className="composer" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
             <div className="composer-input">
-              <textarea ref={textareaRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} placeholder="写下此刻想说的话…" rows={1} disabled={sending || generating || session.status !== "active"} />
+              <textarea ref={textareaRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void sendMessage(); } }} placeholder="写下此刻想说的话…" maxLength={5000} rows={1} disabled={sending || generating || session.status !== "active"} />
               <div className="composer-actions">
                 <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadSessionPhoto(file); }} />
-                <button type="button" className="composer-tool-button" onClick={() => photoInputRef.current?.click()} disabled={creating || sending || generating} title="添加照片"><AppIcon name="photo" /><span>照片</span></button>
-                <button type="button" className="composer-tool-button" onClick={() => dictate("composer")} disabled={creating || sending || generating} aria-pressed={listening === "composer"} title="语音转文字"><AppIcon name="mic" /><span>{listening === "composer" ? "停止" : "语音"}</span></button>
-                <button type="button" className="composer-tool-button" onClick={() => void startSession()} disabled={creating || sending || generating} title="新开日记"><AppIcon name="newDiary" /><span>新日记</span></button>
-                <button type="submit" className="composer-send-button" disabled={!input.trim() || sending || generating} title="发送消息"><AppIcon name="send" /><span>发送</span></button>
+                <button type="button" className="composer-tool-button" onClick={() => photoInputRef.current?.click()} disabled={creating || sending || generating || uploadingPhoto} title="添加照片"><AppIcon name="photo" /><span>照片</span></button>
+                <button type="button" className="composer-tool-button" onClick={() => dictate("composer")} disabled={creating || sending || generating || uploadingPhoto} aria-pressed={listening === "composer"} title="语音转文字"><AppIcon name="mic" /><span>{listening === "composer" ? "停止" : "语音"}</span></button>
+                <button type="button" className="composer-tool-button" onClick={() => void startSession()} disabled={creating || sending || generating || uploadingPhoto} title="新开日记"><AppIcon name="newDiary" /><span>新日记</span></button>
+                <button type="submit" className="composer-send-button" disabled={!input.trim() || sending || generating || uploadingPhoto} title="发送消息"><AppIcon name="send" /><span>发送</span></button>
               </div>
             </div>
           </form>

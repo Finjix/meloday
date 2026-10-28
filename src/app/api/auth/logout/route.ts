@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     assertSameOrigin(request);
     clearSessionCookie(request);
     const response = ok({ ok: true });
-    clearSessionCookieOnResponse(response);
+    clearSessionCookieOnResponse(response, request);
     return response;
   } catch (error) {
     return apiError(error);

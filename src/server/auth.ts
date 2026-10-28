@@ -72,38 +72,41 @@ export function requireRequestUser(request: Request): User {
   return user;
 }
 
-export function setSessionCookie(response: Response, token: string): void {
+export function setSessionCookie(response: Response, token: string, request?: Request): void {
   if (!("cookies" in response)) return;
   const cookieStore = (response as Response & { cookies: { set: (name: string, value: string, options: Record<string, unknown>) => void } }).cookies;
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: request ? publicRequestOrigin(request).startsWith("https:") : process.env.NODE_ENV === "production",
     path: "/",
     maxAge: AUTH_SESSION_DAYS * 24 * 60 * 60,
   });
 }
 
-export function clearSessionCookieOnResponse(response: Response): void {
+export function clearSessionCookieOnResponse(response: Response, request?: Request): void {
   if (!("cookies" in response)) return;
   const cookieStore = (response as Response & { cookies: { set: (name: string, value: string, options: Record<string, unknown>) => void } }).cookies;
-  cookieStore.set(SESSION_COOKIE, "", { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 0 });
+  cookieStore.set(SESSION_COOKIE, "", { httpOnly: true, sameSite: "lax", secure: request ? publicRequestOrigin(request).startsWith("https:") : process.env.NODE_ENV === "production", path: "/", maxAge: 0 });
+}
+
+export function publicRequestOrigin(request: Request): string {
+  try {
+    // When the app is behind Nginx, request.url can contain the internal
+    // Node address rather than the public host that the browser used.
+    const protocol = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || new URL(request.url).protocol.replace(":", "");
+    const host = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || request.headers.get("host")?.trim();
+    return host ? new URL(`${protocol}://${host}`).origin : new URL(request.url).origin;
+  } catch {
+    throw new HttpError(403, "BAD_ORIGIN", "请求来源不受信任。");
+  }
 }
 
 export function assertSameOrigin(request: Request): void {
   const origin = request.headers.get("origin");
   if (!origin) return;
 
-  let requestOrigin: string;
-  try {
-    // When the app is behind Nginx, request.url can contain the internal
-    // Node address rather than the public host that the browser used.
-    const protocol = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || new URL(request.url).protocol.replace(":", "");
-    const host = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || request.headers.get("host")?.trim();
-    requestOrigin = host ? new URL(`${protocol}://${host}`).origin : new URL(request.url).origin;
-  } catch {
-    throw new HttpError(403, "BAD_ORIGIN", "请求来源不受信任。");
-  }
+  const requestOrigin = publicRequestOrigin(request);
 
   if (origin !== requestOrigin) throw new HttpError(403, "BAD_ORIGIN", "请求来源不受信任。");
 }

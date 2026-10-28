@@ -182,6 +182,22 @@ const migrations: Array<{ version: number; sql: string }> = [
       CREATE INDEX idx_diary_regeneration_entry ON diary_regeneration_jobs(entry_id, created_at DESC);
     `,
   },
+  {
+    version: 7,
+    sql: `
+      CREATE TABLE diary_checkins_retained (
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        checkin_date TEXT NOT NULL,
+        entry_id TEXT UNIQUE REFERENCES diary_entries(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, checkin_date)
+      );
+      INSERT INTO diary_checkins_retained SELECT * FROM diary_checkins;
+      DROP TABLE diary_checkins;
+      ALTER TABLE diary_checkins_retained RENAME TO diary_checkins;
+      CREATE INDEX idx_diary_checkins_user_date ON diary_checkins(user_id, checkin_date DESC);
+    `,
+  },
 ];
 
 function createDb(): Database.Database {
@@ -205,11 +221,6 @@ function createDb(): Database.Database {
     apply();
   }
 
-  const now = new Date().toISOString();
-  database.prepare("UPDATE generation_jobs SET status = 'failed', audio_asset_id = NULL, cover_asset_id = NULL, error_message = '服务重启后任务已结束，请重新生成。', updated_at = ? WHERE status IN ('queued', 'running')").run(now);
-  database.prepare("UPDATE active_sessions SET status = 'active', last_activity_at = ?, expires_at = ? WHERE status = 'generating'").run(now, expiresAtIso());
-  database.prepare("UPDATE diary_regeneration_jobs SET status = 'failed', asset_id = NULL, error_message = '服务重启后任务已结束，请重试。', updated_at = ? WHERE status IN ('queued', 'running')").run(now);
-
   return database;
 }
 
@@ -223,4 +234,15 @@ export function closeDb(): void {
   const globalDb = globalThis as GlobalWithDb;
   globalDb.__melodayDb?.close();
   delete globalDb.__melodayDb;
+}
+
+// Recovery belongs to server startup, never to migration or cleanup connections.
+export function recoverInterruptedJobs(): void {
+  const database = getDb();
+  database.transaction(() => {
+    const now = new Date().toISOString();
+    database.prepare("UPDATE generation_jobs SET status = 'failed', audio_asset_id = NULL, cover_asset_id = NULL, error_message = '服务重启后任务已结束，请重新生成。', updated_at = ? WHERE status IN ('queued', 'running')").run(now);
+    database.prepare("UPDATE active_sessions SET status = 'active', last_activity_at = ?, expires_at = ? WHERE status = 'generating'").run(now, expiresAtIso());
+    database.prepare("UPDATE diary_regeneration_jobs SET status = 'failed', asset_id = NULL, error_message = '服务重启后任务已结束，请重试。', updated_at = ? WHERE status IN ('queued', 'running')").run(now);
+  })();
 }

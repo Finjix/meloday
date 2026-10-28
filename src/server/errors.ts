@@ -16,6 +16,8 @@ export function apiError(error: unknown): NextResponse {
     return NextResponse.json({ error: { code: error.code, message: error.message } }, { status: error.status });
   }
 
+  if (error instanceof SyntaxError) return NextResponse.json({ error: { code: "INVALID_JSON", message: "请求格式不正确。" } }, { status: 400 });
+
   console.error("[meloday] unexpected api error", error instanceof Error ? error.message : error);
   return NextResponse.json(
     { error: { code: "INTERNAL_ERROR", message: "暂时遇到一点问题，请稍后再试。" } },

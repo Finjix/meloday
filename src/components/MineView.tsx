@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch, mediaUrl } from "@/lib/client";
 import type { DiaryCheckinStatus, User } from "@/lib/types";
 import { useAuth } from "./AuthContext";
+import { resetHomeCache } from "./HomeApp";
 import { AppIcon } from "./AppIcon";
 import { PurchaseDialog } from "./PurchaseDialog";
 
@@ -44,7 +45,11 @@ export function MineView() {
     setBusy(true); const form = new FormData(); form.set("avatar", file);
     try { const response = await fetch("/api/profile/avatar", { method: "POST", body: form }); const payload = await response.json(); if (!response.ok) throw new Error(payload?.error?.message ?? "头像上传失败。"); setUser(payload.data); await refresh(); } catch (err) { setNotice(err instanceof Error ? err.message : "头像上传失败。"); } finally { setBusy(false); event.target.value = ""; }
   };
-  const signOut = async () => { setBusy(true); await logout(); router.replace("/login"); };
+  const signOut = async () => {
+    setBusy(true); setNotice("");
+    try { await logout(); resetHomeCache(); router.replace("/login"); }
+    catch (error) { setNotice(error instanceof Error ? error.message : "退出失败，请重试。"); setBusy(false); }
+  };
 
   if (!user) return profileLoading ? <div className="page-scroll loading-panel"><span className="loading-orbit" />正在打开我的…</div> : <div className="page-scroll"><div className="notice">{notice || "个人资料暂时打不开。"}</div><button className="button button-primary" onClick={() => window.location.reload()}>重新打开</button></div>;
   const usage = capacity ? Math.min(100, (capacity.used / Math.max(capacity.limit, 1)) * 100) : 0;

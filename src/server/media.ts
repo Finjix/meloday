@@ -71,8 +71,8 @@ export async function readMediaForUser(assetId: string, userId: string | null): 
   }
 }
 
-export async function removeOrphanedMedia(): Promise<number> {
-  const rows = deleteOrphanedMedia();
+export async function removeOrphanedMedia(minAgeMs?: number): Promise<number> {
+  const rows = deleteOrphanedMedia(minAgeMs);
   await Promise.all(rows.map((row) => unlink(absoluteStoragePath(row.storagePath)).catch(() => undefined)));
   return rows.length;
 }

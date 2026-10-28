@@ -5,6 +5,12 @@ import { DEFAULT_AGENT_STATE, EMPTY_DIARY_DRAFT, draftText, mergeAgentState, typ
 import { generateAgentTurn } from "./providers";
 import { enforceRateLimit } from "./rate-limit";
 
+const pendingMessages = new Set<string>();
+
+export function assertSessionIdle(id: string): void {
+  if (pendingMessages.has(id)) throw new HttpError(409, "MESSAGE_IN_PROGRESS", "请等待当前回复完成。");
+}
+
 export function newSession(userId: string): SessionSnapshot {
   enforceRateLimit("session", userId, { limit: 20, windowMs: 60 * 60 * 1000 });
   markExpiredSessions();
@@ -78,6 +84,7 @@ export function getSessionSnapshot(id: string, userId: string): SessionSnapshot 
 }
 
 function assertActive(id: string, userId: string): SessionSnapshot {
+  assertSessionIdle(id);
   const snapshot = getSessionSnapshot(id, userId);
   if (!snapshot) throw new HttpError(404, "SESSION_NOT_FOUND", "这段临时日记已经结束了。");
   if (snapshot.status !== "active") throw new HttpError(409, "SESSION_NOT_ACTIVE", "当前日记不在可继续编辑状态。");
@@ -92,35 +99,39 @@ function explicitlyRequestsGeneration(content: string): boolean {
 export async function receiveMessage(id: string, userId: string, userName: string, content: string): Promise<{ snapshot: SessionSnapshot; shouldGenerate: boolean; generationReason: string | null }> {
   enforceRateLimit("message", userId, { limit: 40, windowMs: 60 * 60 * 1000 });
   const before = assertActive(id, userId);
-  const userMessage = addSessionMessage(id, "user", content);
-  const withUser = getSessionSnapshot(id, userId)!;
-  let reply;
+  pendingMessages.add(id);
   try {
-    reply = await generateAgentTurn({ userName, userMessage: content, state: before.state, draft: before.draft, recentMessages: withUser.messages.slice(-12) });
-  } catch (error) {
-    deleteSessionMessage(userMessage.id);
-    throw error;
-  }
-  const state = mergeAgentState(before.state, reply.statePatch);
-  const draft: DiaryDraft = {
-    ...before.draft,
-    userTurnCount: before.draft.userTurnCount + 1,
-    turnsSinceOrganization: 0,
-    recentText: [before.draft.recentText, content.trim()].filter(Boolean).join("\n"),
-  };
+    const userMessage = addSessionMessage(id, "user", content);
+    const withUser = getSessionSnapshot(id, userId)!;
+    let reply;
+    try {
+      reply = await generateAgentTurn({ userName, userMessage: content, state: before.state, draft: before.draft, recentMessages: withUser.messages.slice(-12) });
+    } catch (error) {
+      deleteSessionMessage(userMessage.id);
+      throw error;
+    }
+    const state = mergeAgentState(before.state, reply.statePatch);
+    const draft: DiaryDraft = {
+      ...before.draft,
+      userTurnCount: before.draft.userTurnCount + 1,
+      turnsSinceOrganization: 0,
+      recentText: [before.draft.recentText, content.trim()].filter(Boolean).join("\n"),
+    };
 
-  const replyText = reply.replyParts.join("\n");
-  addSessionMessage(id, "agent", replyText);
-  touchActiveSession(id, { state, draft, expiresAt: expiresAtIso() });
-  const userRequestedGeneration = explicitlyRequestsGeneration(content);
-  const hasMinimumUserTurns = draft.userTurnCount >= 8;
-  const shouldGenerate = userRequestedGeneration || (hasMinimumUserTurns && (reply.shouldGenerate || state.completeness >= 0.8));
-  return { snapshot: getSessionSnapshot(id, userId)!, shouldGenerate, generationReason: userRequestedGeneration ? "用户主动要求生成" : reply.generationReason ?? (shouldGenerate ? "日记信息已经收集完成" : null) };
+    const replyText = reply.replyParts.join("\n");
+    addSessionMessage(id, "agent", replyText);
+    touchActiveSession(id, { state, draft, expiresAt: expiresAtIso() });
+    const userRequestedGeneration = explicitlyRequestsGeneration(content);
+    const hasMinimumUserTurns = draft.userTurnCount >= 8;
+    const shouldGenerate = userRequestedGeneration || (hasMinimumUserTurns && (reply.shouldGenerate || state.completeness >= 0.8));
+    return { snapshot: getSessionSnapshot(id, userId)!, shouldGenerate, generationReason: userRequestedGeneration ? "用户主动要求生成" : reply.generationReason ?? (shouldGenerate ? "日记信息已经收集完成" : null) };
+  } finally {
+    pendingMessages.delete(id);
+  }
 }
 
 export function endSession(id: string, userId: string): void {
-  const snapshot = getSessionSnapshot(id, userId);
-  if (!snapshot) throw new HttpError(404, "SESSION_NOT_FOUND", "这段临时日记已经结束了。");
+  assertActive(id, userId);
   setActiveSessionStatus(id, "abandoned");
   deleteActiveSession(id);
 }
